@@ -142,7 +142,7 @@ struct FolderView: View {
                         .simultaneousGesture(
                             TapGesture()
                                 .onEnded { _ in
-                                    // 点击编辑框时阻止事件冒泡到父视图
+                                    // Prevent event bubbling to parent view when clicking edit box
                                 }
                         )
                 } else {
@@ -150,14 +150,14 @@ struct FolderView: View {
                         .font(.title)
                         .foregroundColor(.primary)
                         .padding()
-                        .contentShape(Rectangle()) // 确保整个区域都可以点击
+                        .contentShape(Rectangle()) // Ensure entire area is clickable
                         .onTapGesture(count: 2) {
                             startEditing()
                         }
                         .onTapGesture {
-                            // 单击时不做任何操作，避免意外触发
+                            // Do nothing on single click to avoid accidental triggers
                         }
-                        .id(forceRefreshTrigger) // 使用forceRefreshTrigger强制刷新
+                        .id(forceRefreshTrigger) // Use forceRefreshTrigger to force refresh
                 }
             }
             Spacer()
@@ -167,17 +167,17 @@ struct FolderView: View {
     
     @ViewBuilder
     private func appGridSection(geometry geo: GeometryProxy) -> some View {
-        // 初步估算（用当前列数）
+        // Initial estimation (using current column count)
         let baseColumnWidth = computeColumnWidth(containerWidth: geo.size.width, columns: columnsCount)
         let baseAppHeight = computeAppHeight(containerHeight: geo.size.height, columns: columnsCount)
         let computedIcon = min(baseColumnWidth, baseAppHeight) * 0.75
         let iconSize: CGFloat = preferredIconSize ?? computedIcon
-        // 固定为 6 列
+        // Fixed to 6 columns
         let desiredColumns = 6
-        // 使用自适应列数重新计算尺寸
+        // Use adaptive column count to recalculate dimensions
         let recomputedColumnWidth = computeColumnWidth(containerWidth: geo.size.width, columns: desiredColumns)
         let recomputedAppHeight = computeAppHeight(containerHeight: geo.size.height, columns: desiredColumns)
-        // 保障单元格至少能容纳传入的图标尺寸与标签区域
+        // Ensure cell can at least contain passed icon size and label area
         let columnWidth = max(recomputedColumnWidth, iconSize)
         let appHeight = max(recomputedAppHeight, iconSize + 32)
         let labelWidth: CGFloat = columnWidth * 0.9
@@ -201,7 +201,7 @@ struct FolderView: View {
                 
                 .animation(LNAnimations.gridUpdate, value: pendingDropIndex)
                 .animation(LNAnimations.gridUpdate, value: folder.apps)
-                .id(forceRefreshTrigger) // 使用forceRefreshTrigger强制刷新应用网格
+                .id(forceRefreshTrigger) // Use forceRefreshTrigger to force refresh app grid
                 .padding(EdgeInsets(top: gridPadding, leading: gridPadding, bottom: gridPadding, trailing: gridPadding))
                 .background(
                     GeometryReader { proxy in
@@ -213,7 +213,7 @@ struct FolderView: View {
                 )
             }
             .scrollIndicators(.hidden)
-            .disabled(isEditingName) // 编辑状态下禁用滚动
+            .disabled(isEditingName) // Disable scrolling in edit mode
             .onAppear { columnsCount = desiredColumns }
             .onChange(of: geo.size) {
                 columnsCount = desiredColumns

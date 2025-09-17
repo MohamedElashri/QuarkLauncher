@@ -45,7 +45,7 @@ final class AppStore: ObservableObject {
     @Published var handoffDraggingApp: AppInfo? = nil
     @Published var handoffDragScreenLocation: CGPoint? = nil
     
-    // 触发器
+    // Triggers
     @Published var folderUpdateTrigger: UUID = UUID()
     @Published var gridRefreshTrigger: UUID = UUID()
     
@@ -57,18 +57,18 @@ final class AppStore: ObservableObject {
     private var pendingForceFullScan: Bool = false
     private let fullRescanThreshold: Int = 50
 
-    // 状态标记
+    // Status flags
     private var hasPerformedInitialScan: Bool = false
     private var cancellables: Set<AnyCancellable> = []
     private var hasAppliedOrderFromStore: Bool = false
     
-    // 后台刷新队列与节流
+    // Background refresh queue and throttling
     private let refreshQueue = DispatchQueue(label: "app.store.refresh", qos: .userInitiated)
     private var gridRefreshWorkItem: DispatchWorkItem?
     private var rescanWorkItem: DispatchWorkItem?
     private let fsEventsQueue = DispatchQueue(label: "app.store.fsevents")
     
-    // 计算属性
+    // Computed properties
     private var itemsPerPage: Int { 35 }
     
 
@@ -83,7 +83,7 @@ final class AppStore: ObservableObject {
     init() {
         self.isFullscreenMode = UserDefaults.standard.bool(forKey: "isFullscreenMode")
         self.scrollSensitivity = UserDefaults.standard.double(forKey: "scrollSensitivity")
-        // 如果没有保存过设置，使用默认值
+        // If no setting has been saved, use default value
         if self.scrollSensitivity == 0.0 {
             self.scrollSensitivity = 0.15
         }
@@ -92,7 +92,7 @@ final class AppStore: ObservableObject {
     func configure(modelContext: ModelContext) {
         self.modelContext = modelContext
         
-        // 立即尝试加载持久化数据（如果已有数据）——不要过早设置标记，等待加载完成时设置
+        // Immediately try to load persisted data (if data exists) - don't set flag too early, wait for loading to complete
         if !hasAppliedOrderFromStore {
             loadAllOrder()
         }
@@ -109,12 +109,12 @@ final class AppStore: ObservableObject {
             }
             .store(in: &cancellables)
         
-        // 监听items变化，自动保存排序
+        // Listen for items changes, auto-save ordering
         $items
             .debounce(for: .seconds(0.5), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self = self, !self.items.isEmpty else { return }
-                // 延迟保存，避免频繁保存
+                // Delayed save to avoid frequent saves
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     self.saveAllOrder()
                 }
@@ -129,16 +129,16 @@ final class AppStore: ObservableObject {
 
     // MARK: - Initial scan (once)
     func performInitialScanIfNeeded() {
-        // 先尝试加载持久化数据，避免被扫描覆盖（不提前设置标记）
+        // First try to load persisted data to avoid being overridden by scan (don't set flag too early)
         if !hasAppliedOrderFromStore {
             loadAllOrder()
         }
         
-        // 然后进行扫描，但保持现有顺序
+        // Then perform scan while preserving existing order
         hasPerformedInitialScan = true
         scanApplicationsWithOrderPreservation()
         
-        // 扫描完成后生成缓存
+        // Generate cache after scan completes
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             self?.generateCacheAfterScan()
         }
@@ -181,24 +181,24 @@ final class AppStore: ObservableObject {
                     self.saveAllOrder()
                 }
                 
-                // 扫描完成后生成缓存
+                // Generate cache after scan completes
                 self.generateCacheAfterScan()
             }
         }
     }
     
-    /// 智能扫描应用：保持现有排序，新增应用放到最后，缺失应用移除，自动页面内补位
+    /// Smart scan applications: preserve existing order, add new apps to end, remove missing apps, auto fill gaps within pages
     func scanApplicationsWithOrderPreservation() {
         DispatchQueue.global(qos: .userInitiated).async {
             var found: [AppInfo] = []
             var seenPaths = Set<String>()
 
-            // 使用并发队列加速扫描
+            // Use concurrent queue to accelerate scanning
             let scanQueue = DispatchQueue(label: "app.scan", attributes: .concurrent)
             let group = DispatchGroup()
             let lock = NSLock()
             
-            // 扫描所有应用
+            // Scan all applications
             for path in self.applicationSearchPaths {
                 group.enter()
                 scanQueue.async {
@@ -223,7 +223,7 @@ final class AppStore: ObservableObject {
                             }
                         }
                         
-                        // 线程安全地合并结果
+                        // Thread-safely merge results
                         lock.lock()
                         found.append(contentsOf: localFound)
                         seenPaths.formUnion(localSeenPaths)
@@ -235,7 +235,7 @@ final class AppStore: ObservableObject {
             
             group.wait()
             
-            // 去重和排序 - 使用更安全的方法
+            // Deduplication and sorting - use safer method
             var uniqueApps: [AppInfo] = []
             var uniqueSeenPaths = Set<String>()
             
@@ -246,11 +246,11 @@ final class AppStore: ObservableObject {
                 }
             }
             
-            // 保持现有应用的顺序，只对新应用按名称排序
+            // Preserve existing app order, only sort new apps by name
             var newApps: [AppInfo] = []
             var existingAppPaths = Set<String>()
             
-            // 首先保持现有应用的顺序
+            // First preserve existing app order
             for app in self.apps {
                 if uniqueApps.contains(where: { $0.url.path == app.url.path }) {
                     newApps.append(app)
@@ -258,7 +258,7 @@ final class AppStore: ObservableObject {
                 }
             }
             
-            // 然后添加新应用，按名称排序
+            // Then add new apps, sorted by name
             let newAppPaths = uniqueApps.filter { !existingAppPaths.contains($0.url.path) }
             let sortedNewApps = newAppPaths.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
             newApps.append(contentsOf: sortedNewApps)
@@ -266,79 +266,79 @@ final class AppStore: ObservableObject {
             DispatchQueue.main.async {
                 self.processScannedApplications(newApps)
                 
-                // 扫描完成后生成缓存
+                // Generate cache after scan completes
                 self.generateCacheAfterScan()
             }
         }
     }
     
-    /// 手动触发完全重新扫描（用于设置中的手动刷新）
+    /// Manually trigger complete rescan (for manual refresh in settings)
     func forceFullRescan() {
-        // 清除缓存
+        // Clear cache
         cacheManager.clearAllCaches()
         
         hasPerformedInitialScan = false
         scanApplicationsWithOrderPreservation()
     }
     
-    /// 处理扫描到的应用，智能匹配现有排序
+    /// Process scanned applications, intelligently match existing order
     private func processScannedApplications(_ newApps: [AppInfo]) {
-        // 保存当前 items 的顺序和结构
+        // Save current items order and structure
         let currentItems = self.items
         
-        // 创建新应用列表，但保持现有顺序
+        // Create new app list while preserving existing order
         var updatedApps: [AppInfo] = []
         var newAppsToAdd: [AppInfo] = []
         
-        // 第一步：保持现有应用的顺序，只更新仍然存在的应用
+        // Step 1: Preserve existing app order, only update apps that still exist
         for app in self.apps {
             if newApps.contains(where: { $0.url.path == app.url.path }) {
-                // 应用仍然存在，保持原有位置
+                // App still exists, maintain original position
                 updatedApps.append(app)
             } else {
-                // 应用已删除，从所有相关位置移除
+                // App deleted, remove from all related positions
                 self.removeDeletedApp(app)
             }
         }
         
-        // 第二步：找出新增的应用
+        // Step 2: Find newly added applications
         for newApp in newApps {
             if !self.apps.contains(where: { $0.url.path == newApp.url.path }) {
                 newAppsToAdd.append(newApp)
             }
         }
         
-        // 第三步：将新增应用添加到末尾，保持现有应用顺序不变
+        // Step 3: Add new apps to the end, keeping existing app order unchanged
         updatedApps.append(contentsOf: newAppsToAdd)
         
-        // 更新应用列表
+        // Update app list
         self.apps = updatedApps
         
-        // 第四步：智能重建项目列表，保持用户排序
+        // Step 4: Intelligently rebuild item list, preserving user order
         self.smartRebuildItemsWithOrderPreservation(currentItems: currentItems, newApps: newAppsToAdd)
         
-        // 第五步：自动页面内补位
+        // Step 5: Auto-compact within pages
         self.compactItemsWithinPages()
         
-        // 第六步：保存新的顺序
+        // Step 6: Save new order
         self.saveAllOrder()
         
-        // 触发界面更新
+        // Trigger UI updates
         self.triggerFolderUpdate()
         self.triggerGridRefresh()
     }
     
-    /// 移除已删除的应用
+    /// Remove deleted applications
     private func removeDeletedApp(_ deletedApp: AppInfo) {
-        // 从文件夹中移除
+        // Remove from folders
         for folderIndex in self.folders.indices {
             self.folders[folderIndex].apps.removeAll { $0 == deletedApp }
         }
         
-        // 清理空文件夹
+        // Clean up empty folders
         self.folders.removeAll { $0.apps.isEmpty }
         
-        // 从顶层项目中移除，替换为空槽位
+        // Remove from top-level items, replace with empty slots
         for itemIndex in self.items.indices {
             if case let .app(app) = self.items[itemIndex], app == deletedApp {
                 self.items[itemIndex] = .empty(UUID().uuidString)
@@ -347,13 +347,13 @@ final class AppStore: ObservableObject {
     }
     
     
-    /// 严格保持现有顺序的重建方法
+    /// Strict method for rebuilding while preserving existing order
     private func rebuildItemsWithStrictOrderPreservation(currentItems: [LaunchpadItem]) {
         
         var newItems: [LaunchpadItem] = []
         let appsInFolders = Set(self.folders.flatMap { $0.apps })
         
-        // 严格保持现有项目的顺序和位置
+        // Strictly preserve existing item order and positions
         for (_, item) in currentItems.enumerated() {
             switch item {
             case .folder(let folder):
@@ -432,7 +432,7 @@ final class AppStore: ObservableObject {
         self.items = newItems
     }
     
-    /// 智能重建项目列表，保持用户排序
+    /// Intelligently rebuild item list while preserving user order
     private func smartRebuildItemsWithOrderPreservation(currentItems: [LaunchpadItem], newApps: [AppInfo]) {
         
         // 保存当前的持久化数据，但不立即加载（避免覆盖现有顺序）
@@ -874,7 +874,7 @@ final class AppStore: ObservableObject {
         return AppInfo(name: name, icon: icon, url: url)
     }
     
-    // MARK: - 文件夹管理
+    // MARK: - Folder Management
     func createFolder(with apps: [AppInfo], name: String = "Untitled") -> FolderInfo {
         return createFolder(with: apps, name: name, insertAt: nil)
     }
@@ -1056,7 +1056,7 @@ final class AppStore: ObservableObject {
         saveAllOrder()
     }
     
-    // 一键重置布局：完全重新扫描应用，删除所有文件夹、排序和empty填充
+    // One-click layout reset: completely rescan applications, delete all folders, ordering and empty padding
     func resetLayout() {
         // 关闭打开的文件夹
         openFolder = nil
@@ -1094,7 +1094,7 @@ final class AppStore: ObservableObject {
         }
     }
     
-    /// 单页内自动补位：将每页的 .empty 槽位移动到该页尾部，保持非空项的相对顺序
+    /// Auto-compact within pages: move each page's .empty slots to end of that page, preserving relative order of non-empty items
     func compactItemsWithinPages() {
         guard !items.isEmpty else { return }
         let itemsPerPage = self.itemsPerPage // 使用计算属性
@@ -1123,7 +1123,7 @@ final class AppStore: ObservableObject {
         items = result
     }
 
-    // MARK: - 跨页拖拽：级联插入（满页则将最后一个推入下一页）
+    // MARK: - Cross-page dragging: cascading insertion (if page is full, push last item to next page)
     func moveItemAcrossPagesWithCascade(item: LaunchpadItem, to targetIndex: Int) {
         guard items.indices.contains(targetIndex) || targetIndex == items.count else {
             return
@@ -1256,7 +1256,7 @@ final class AppStore: ObservableObject {
         }
     }
     
-    // MARK: - 持久化：每页独立排序（新）+ 兼容旧版
+    // MARK: - Persistence: per-page independent ordering (new) + legacy compatibility
     func loadAllOrder() {
         guard let modelContext else {
             print("QuarkLauncher: ModelContext is nil, cannot load persisted order")

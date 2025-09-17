@@ -56,7 +56,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window?.contentMinSize = minimumContentSize
         window?.minSize = window?.frameRect(forContentRect: NSRect(origin: .zero, size: minimumContentSize)).size ?? minimumContentSize
         
-        // SwiftData 支持（固定到 Application Support 目录，避免替换应用后数据丢失）
+        // SwiftData support (fixed to Application Support directory to avoid data loss after app replacement)
         do {
             let fm = FileManager.default
             let appSupport = try fm.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
@@ -72,7 +72,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             appStore.configure(modelContext: container.mainContext)
             window?.contentView = NSHostingView(rootView: LaunchpadView(appStore: appStore).modelContainer(container))
         } catch {
-            // 回退到默认容器，保证功能可用
+            // Fall back to default container to ensure functionality
             if let container = try? ModelContainer(for: TopItemData.self, PageEntryData.self) {
                 modelContainer = container
                 appStore.configure(modelContext: container.mainContext)
