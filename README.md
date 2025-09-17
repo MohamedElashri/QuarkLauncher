@@ -3,11 +3,10 @@
 A modern, customizable Launchpad replacement for macOS that gives you better control over application organization and launching experience. It works on macOS 26. 
 
 
-Here is a screen capture of QuarkLauncher in action:
-<div style="text-align: center;">
-  <img src="/img/app_screenshot.png" alt="QuarkLauncher Demo" style="width: 50%; max-width: 300px; height: auto;">
-</div>
 
+<p align="center">
+  <img src="img/app_screenshot.png" alt="QuarkLauncher Demo" height="420"  width="500">
+</p>
 
 
 ## Features
