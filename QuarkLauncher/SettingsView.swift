@@ -111,8 +111,8 @@ struct SettingsView: View {
                         }
                         .toggleStyle(.switch)
                     }
-                    
-                    Text("Navigation shortcuts work when keyboard navigation is active (press any arrow key or Tab to activate).")
+
+                    Text("When choosing shift modifier, you will need to hold the Shift key + your chosen key.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

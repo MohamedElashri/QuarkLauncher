@@ -821,22 +821,23 @@ extension LaunchpadView {
             return nil
         }
 
-        // Shift + Arrow for page navigation
-        // If the modifier is not held, let the arrow key handle normal selection movement
-        // If the modifier is held, handle page navigation here
-
+        // Page navigation shortcuts - work regardless of keyboard navigation state
         let hasRequiredModifier = appStore.useShiftModifier ? event.modifierFlags.contains(.shift) : !event.modifierFlags.contains(.shift)
         
         if hasRequiredModifier {
             if code == appStore.previousPageKey {
-                guard isKeyboardNavigationActive else { return event }
                 navigateToPreviousPage()
-                setSelectionToPageStart(appStore.currentPage)
+                // If keyboard navigation is active, set selection to page start
+                if isKeyboardNavigationActive {
+                    setSelectionToPageStart(appStore.currentPage)
+                }
                 return nil
             } else if code == appStore.nextPageKey {
-                guard isKeyboardNavigationActive else { return event }
                 navigateToNextPage()
-                setSelectionToPageStart(appStore.currentPage)
+                // If keyboard navigation is active, set selection to page start
+                if isKeyboardNavigationActive {
+                    setSelectionToPageStart(appStore.currentPage)
+                }
                 return nil
             }
         }
