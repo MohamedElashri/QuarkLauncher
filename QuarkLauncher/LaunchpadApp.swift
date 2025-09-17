@@ -18,10 +18,9 @@ struct LaunchpadApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     
     var body: some Scene {
-        WindowGroup {
+        Settings {
             EmptyView()
         }
-        .windowStyle(HiddenTitleBarWindowStyle())
         .commands {
             CommandGroup(replacing: .appInfo) {
                 Button("About QuarkLauncher") {
