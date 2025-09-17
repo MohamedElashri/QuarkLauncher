@@ -14,13 +14,17 @@ final class AppStore: ObservableObject {
     @Published var isStartOnLogin: Bool = false
     @Published var isFullscreenMode: Bool = false {
         didSet {
+            // Only proceed if the value actually changed
+            guard oldValue != isFullscreenMode else { return }
+            
             UserDefaults.standard.set(isFullscreenMode, forKey: "isFullscreenMode")
             performFullscreenModeTransition()
         }
     }
     
-    // Debouncing timer for fullscreen mode transitions
+    // Debouncing timer for fullscreen mode transitions (prevent rapid toggles)
     private var fullscreenTransitionTimer: Timer?
+    private var lastFullscreenToggle: Date = Date.distantPast
     
     @Published var scrollSensitivity: Double = 0.15 {
         didSet {
@@ -1553,23 +1557,24 @@ final class AppStore: ObservableObject {
     
     // Optimized fullscreen mode transition with immediate visual feedback
     private func performFullscreenModeTransition() {
+        let now = Date()
+        
+        // Debounce rapid toggles (prevent performance issues from rapid key presses)
+        guard now.timeIntervalSince(lastFullscreenToggle) > 0.05 else { return }
+        lastFullscreenToggle = now
+        
         // Cancel any existing timer
         fullscreenTransitionTimer?.invalidate()
         
-        // Immediate response for better UX - no debouncing delay
+        // Immediate response for better UX - no additional delays
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             
-            // Step 1: Prepare for transition (optimize before animation starts)
-            AppCacheManager.shared.optimizeForFullscreenTransition(items: self.items)
-            
-            // Step 2: Start window animation immediately
+            // Only trigger window animation - remove unnecessary cache optimization
+            // and grid refresh which were causing performance issues
             if let appDelegate = AppDelegate.shared {
                 appDelegate.updateWindowMode(isFullscreen: self.isFullscreenMode)
             }
-            
-            // Step 3: Trigger smooth content animation with the window
-            self.triggerGridRefresh()
         }
     }
     

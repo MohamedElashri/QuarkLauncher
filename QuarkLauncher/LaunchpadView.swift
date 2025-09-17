@@ -270,8 +270,10 @@ struct LaunchpadView: View {
                                                 )
                                             }
                                         }
+                                        // Separate animations to prevent conflicts and improve performance
                                         .animation(LNAnimations.gridUpdate, value: pendingDropIndex)
                                         .animation(LNAnimations.gridUpdate, value: appStore.gridRefreshTrigger)
+                                        // Use the ultra-fast fullscreen transition animation
                                         .animation(LNAnimations.fullscreenTransition, value: appStore.isFullscreenMode)
                                         .frame(maxHeight: .infinity, alignment: .top)
                                     }
@@ -361,6 +363,8 @@ struct LaunchpadView: View {
         }
         .padding()
         .glassEffect(.regular , in: RoundedRectangle(cornerRadius: appStore.isFullscreenMode ? 0 : 30))
+        // Add explicit animation for corner radius changes to match window animation
+        .animation(LNAnimations.fullscreenTransition, value: appStore.isFullscreenMode)
         .ignoresSafeArea()
         .overlay(
             ZStack {

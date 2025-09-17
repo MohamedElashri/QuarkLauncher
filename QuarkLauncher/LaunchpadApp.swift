@@ -244,27 +244,47 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         guard let window = window else { return }
         let screen = getCurrentActiveScreen() ?? NSScreen.main!
         
-        // Optimized window transition with faster, smoother animation
+        // Pre-calculate all values to avoid computation during animation
+        let targetFrame = isFullscreen ? screen.frame : calculateContentRect(for: screen)
+        let targetShadow = !isFullscreen
+        let targetCornerRadius: CGFloat = isFullscreen ? 0 : 30
+        let targetAspectRatio = isFullscreen ? NSSize(width: 0, height: 0) : NSSize(width: 4, height: 3)
+        
+        // Use CATransaction for more precise animation control
+        CATransaction.begin()
+        CATransaction.setAnimationDuration(0.08) // Ultra-fast transition
+        CATransaction.setAnimationTimingFunction(CAMediaTimingFunction(name: .easeOut))
+        
+        // Batch all window changes for optimal performance
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.15 // Reduced from 0.25 for snappier feel
+            context.duration = 0.08 // Match CATransaction duration
             context.allowsImplicitAnimation = true
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut) // Better timing function
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
             
-            // Apply all visual changes together for smoother transition
-            window.animator().setFrame(isFullscreen ? screen.frame : calculateContentRect(for: screen), display: false)
-            window.hasShadow = !isFullscreen
-            window.contentAspectRatio = isFullscreen ? NSSize(width: 0, height: 0) : NSSize(width: 4, height: 3)
+            // Apply all changes simultaneously
+            window.animator().setFrame(targetFrame, display: false)
+            window.hasShadow = targetShadow
+            window.contentAspectRatio = targetAspectRatio
             
-            // Apply corner radius changes immediately during animation
+            // Apply corner radius changes immediately using layer properties
             if let contentView = window.contentView {
                 contentView.wantsLayer = true
-                contentView.layer?.cornerRadius = isFullscreen ? 0 : 30
-                contentView.layer?.masksToBounds = true
+                if let layer = contentView.layer {
+                    layer.cornerRadius = targetCornerRadius
+                    layer.masksToBounds = true
+                    // Use implicit animations for smoother corner radius transition
+                    let animation = CABasicAnimation(keyPath: "cornerRadius")
+                    animation.duration = 0.08
+                    animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                    layer.add(animation, forKey: "cornerRadius")
+                }
             }
         } completionHandler: {
-            // Final display update after animation completes
+            // Single display update after all changes complete
             window.display()
         }
+        
+        CATransaction.commit()
     }
     
     private func applyCornerRadius() {
