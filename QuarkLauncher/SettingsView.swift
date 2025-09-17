@@ -58,6 +58,64 @@ struct SettingsView: View {
                         }
                     }
                 }
+                
+                Divider()
+                    .padding(.vertical)
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Page Navigation Shortcuts")
+                        .font(.headline)
+                    
+                    HStack {
+                        Text("Current shortcuts:")
+                        Text(appStore.navigationKeysDescription())
+                            .font(.system(.body, design: .monospaced))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(.secondary.opacity(0.2))
+                            .cornerRadius(6)
+                        Spacer()
+                    }
+                    
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text("Previous Page")
+                                .font(.subheadline)
+                            Picker("Previous Page Key", selection: $appStore.previousPageKey) {
+                                Text("← Left Arrow").tag(UInt16(123))
+                                Text("↑ Up Arrow").tag(UInt16(126))
+                                Text("Tab").tag(UInt16(48))
+                            }
+                            .pickerStyle(.menu)
+                        }
+                        
+                        Spacer()
+                        
+                        VStack(alignment: .leading) {
+                            Text("Next Page")
+                                .font(.subheadline)
+                            Picker("Next Page Key", selection: $appStore.nextPageKey) {
+                                Text("→ Right Arrow").tag(UInt16(124))
+                                Text("↓ Down Arrow").tag(UInt16(125))
+                                Text("Space").tag(UInt16(49))
+                            }
+                            .pickerStyle(.menu)
+                        }
+                    }
+                    
+                    HStack {
+                        Text("Require Shift modifier")
+                        Spacer()
+                        Toggle(isOn: $appStore.useShiftModifier) {
+                            
+                        }
+                        .toggleStyle(.switch)
+                    }
+                    
+                    Text("Navigation shortcuts work when keyboard navigation is active (press any arrow key or Tab to activate).")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             .padding()
             

@@ -33,6 +33,25 @@ final class AppStore: ObservableObject {
         }
     }
     
+    // Navigation keyboard shortcuts
+    @Published var previousPageKey: UInt16 = 123 { // Default: Left Arrow
+        didSet {
+            UserDefaults.standard.set(Int(previousPageKey), forKey: "previousPageKey")
+        }
+    }
+    
+    @Published var nextPageKey: UInt16 = 124 { // Default: Right Arrow
+        didSet {
+            UserDefaults.standard.set(Int(nextPageKey), forKey: "nextPageKey")
+        }
+    }
+    
+    @Published var useShiftModifier: Bool = false { // Default: no modifier needed
+        didSet {
+            UserDefaults.standard.set(useShiftModifier, forKey: "useShiftModifier")
+        }
+    }
+    
     // Cache manager
     private let cacheManager = AppCacheManager.shared
     
@@ -87,6 +106,37 @@ final class AppStore: ObservableObject {
         if self.scrollSensitivity == 0.0 {
             self.scrollSensitivity = 0.15
         }
+        
+        // Load navigation key settings
+        let savedPreviousKey = UserDefaults.standard.object(forKey: "previousPageKey") as? Int
+        self.previousPageKey = UInt16(savedPreviousKey ?? 123) // Default: Left Arrow
+        
+        let savedNextKey = UserDefaults.standard.object(forKey: "nextPageKey") as? Int
+        self.nextPageKey = UInt16(savedNextKey ?? 124) // Default: Right Arrow
+        
+        self.useShiftModifier = UserDefaults.standard.bool(forKey: "useShiftModifier")
+    }
+    
+    // MARK: - Keyboard Shortcut Helpers
+    func keyCodeName(for keyCode: UInt16) -> String {
+        switch keyCode {
+        case 123: return "←"
+        case 124: return "→"
+        case 126: return "↑"
+        case 125: return "↓"
+        case 48: return "Tab"
+        case 36: return "Enter"
+        case 49: return "Space"
+        case 53: return "Escape"
+        default: return "Key \(keyCode)"
+        }
+    }
+    
+    func navigationKeysDescription() -> String {
+        let prevKey = keyCodeName(for: previousPageKey)
+        let nextKey = keyCodeName(for: nextPageKey)
+        let modifier = useShiftModifier ? "Shift + " : ""
+        return "\(modifier)\(prevKey) / \(modifier)\(nextKey)"
     }
 
     func configure(modelContext: ModelContext) {

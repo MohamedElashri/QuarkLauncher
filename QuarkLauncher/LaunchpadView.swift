@@ -820,21 +820,20 @@ extension LaunchpadView {
             return nil
         }
 
-        // Shift + 方向键翻页
-        if event.modifierFlags.contains(.shift) {
-            switch code {
-            case 123: // left arrow - 向前翻页
+        // Shift + 方向键翻页 - 改为用户配置的导航键
+        let hasRequiredModifier = appStore.useShiftModifier ? event.modifierFlags.contains(.shift) : !event.modifierFlags.contains(.shift)
+        
+        if hasRequiredModifier {
+            if code == appStore.previousPageKey {
                 guard isKeyboardNavigationActive else { return event }
                 navigateToPreviousPage()
                 setSelectionToPageStart(appStore.currentPage)
                 return nil
-            case 124: // right arrow - 向后翻页
+            } else if code == appStore.nextPageKey {
                 guard isKeyboardNavigationActive else { return event }
                 navigateToNextPage()
                 setSelectionToPageStart(appStore.currentPage)
                 return nil
-            default:
-                break
             }
         }
 
@@ -866,8 +865,17 @@ extension LaunchpadView {
             return nil
         }
 
-        // 普通方向键导航（仅在非Shift状态下）
-        if !event.modifierFlags.contains(.shift), let (dx, dy) = arrowDelta(for: code) {
+        // 普通方向键导航（在没有页面导航修饰符的情况下）
+        if let (dx, dy) = arrowDelta(for: code) {
+            let hasPageNavModifier = appStore.useShiftModifier ? event.modifierFlags.contains(.shift) : !event.modifierFlags.contains(.shift)
+            let isPageNavKey = (code == appStore.previousPageKey || code == appStore.nextPageKey)
+            
+            // 如果这是页面导航键且有正确的修饰符，让它在上面的页面导航逻辑中处理
+            if isPageNavKey && hasPageNavModifier {
+                return event
+            }
+            
+            // 否则进行普通的选择导航
             guard isKeyboardNavigationActive else { return event }
             moveSelection(dx: dx, dy: dy)
             return nil
