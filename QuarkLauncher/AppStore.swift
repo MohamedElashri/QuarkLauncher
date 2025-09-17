@@ -15,17 +15,12 @@ final class AppStore: ObservableObject {
     @Published var isFullscreenMode: Bool = false {
         didSet {
             UserDefaults.standard.set(isFullscreenMode, forKey: "isFullscreenMode")
-            DispatchQueue.main.async { [weak self] in
-                if let appDelegate = AppDelegate.shared {
-                    appDelegate.updateWindowMode(isFullscreen: self?.isFullscreenMode ?? false)
-                }
-            }
-            
-            DispatchQueue.main.async { [weak self] in
-                self?.triggerGridRefresh()
-            }
+            performFullscreenModeTransition()
         }
     }
+    
+    // Debouncing timer for fullscreen mode transitions
+    private var fullscreenTransitionTimer: Timer?
     
     @Published var scrollSensitivity: Double = 0.15 {
         didSet {
@@ -1542,7 +1537,53 @@ final class AppStore: ObservableObject {
     
     // Trigger grid view refresh, used for interface updates after drag operations
     func triggerGridRefresh() {
-        gridRefreshTrigger = UUID()
+        // Only trigger if not already refreshing
+        if !isGridRefreshing {
+            isGridRefreshing = true
+            gridRefreshTrigger = UUID()
+            
+            // Reset the flag after a short delay to allow for batching
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                self?.isGridRefreshing = false
+            }
+        }
+    }
+    
+    @Published private var isGridRefreshing = false
+    
+    // Optimized fullscreen mode transition with debouncing and batched updates
+    private func performFullscreenModeTransition() {
+        // Cancel any existing timer
+        fullscreenTransitionTimer?.invalidate()
+        
+        // Debounce rapid toggles
+        fullscreenTransitionTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { [weak self] _ in
+            guard let self = self else { return }
+            
+            DispatchQueue.main.async {
+                // Step 1: Update window mode first (fastest operation)
+                if let appDelegate = AppDelegate.shared {
+                    appDelegate.updateWindowMode(isFullscreen: self.isFullscreenMode)
+                }
+                
+                // Step 2: Defer expensive grid operations until after window transition
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    // Batch the expensive operations
+                    self.performBatchedGridUpdate()
+                }
+            }
+        }
+    }
+    
+    // Perform batched grid updates to minimize UI churn
+    private func performBatchedGridUpdate() {
+        // Optimize cache for better performance
+        AppCacheManager.shared.optimizeForFullscreenTransition(items: items)
+        
+        // Only trigger grid refresh if necessary
+        DispatchQueue.main.async { [weak self] in
+            self?.triggerGridRefresh()
+        }
     }
     
     

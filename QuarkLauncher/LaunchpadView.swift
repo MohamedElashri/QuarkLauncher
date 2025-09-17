@@ -58,7 +58,9 @@ struct LaunchpadView: View {
     // Performance optimization: use static cache to avoid state modification issues
     private static var geometryCache: [String: CGPoint] = [:]
     private static var lastGeometryUpdate: Date = Date.distantPast
+    private static var layoutConfigCache: [String: (width: CGFloat, height: CGFloat, iconSize: CGFloat)] = [:]
     private let geometryCacheTimeout: TimeInterval = 0.1 // 100ms cache timeout
+    private let layoutCacheTimeout: TimeInterval = 0.5 // 500ms cache timeout for layout calculations
     
     // Performance monitoring
     @State private var performanceMetrics: [String: TimeInterval] = [:]
@@ -227,24 +229,15 @@ struct LaunchpadView: View {
                     .opacity(isFolderOpen ? 0.1 : 1)
                 
                 GeometryReader { geo in
+                    let layoutConfig = calculateOptimizedLayout(for: geo, actualTopPadding: actualTopPadding, actualBottomPadding: actualBottomPadding)
                     let appCountPerRow = config.columns
                     let maxRowsPerPage = Int(ceil(Double(config.itemsPerPage) / Double(appCountPerRow)))
                     let availableWidth = geo.size.width
                     let availableHeight = geo.size.height - (actualTopPadding + actualBottomPadding)
                     
-                    let appHeight: CGFloat = {
-                        let totalRowSpacing = config.rowSpacing * CGFloat(maxRowsPerPage - 1)
-                        let height = (availableHeight - totalRowSpacing) / CGFloat(maxRowsPerPage)
-                        return max(56, height)
-                    }()
-
-                    let columnWidth: CGFloat = {
-                        let totalColumnSpacing = config.columnSpacing * CGFloat(appCountPerRow - 1)
-                        let width = (availableWidth - totalColumnSpacing) / CGFloat(appCountPerRow)
-                        return max(40, width)
-                    }()
-
-                    let iconSize: CGFloat = min(columnWidth, appHeight) * 0.8
+                    let appHeight = layoutConfig.height
+                    let columnWidth = layoutConfig.width
+                    let iconSize = layoutConfig.iconSize
 
                     let effectivePageWidth = geo.size.width + config.pageSpacing
 
@@ -1304,6 +1297,54 @@ extension LaunchpadView {
 
 // MARK: - Geometry & Drag helpers
 extension LaunchpadView {
+    // Optimized layout calculation with caching
+    private func calculateOptimizedLayout(for geo: GeometryProxy, actualTopPadding: CGFloat, actualBottomPadding: CGFloat) -> (width: CGFloat, height: CGFloat, iconSize: CGFloat) {
+        let cacheKey = "\(geo.size.width)x\(geo.size.height)_\(config.isFullscreen)_\(actualTopPadding)_\(actualBottomPadding)"
+        let now = Date()
+        
+        // Check cache first
+        if let cached = Self.layoutConfigCache[cacheKey],
+           now.timeIntervalSince(Self.lastGeometryUpdate) < layoutCacheTimeout {
+            return cached
+        }
+        
+        // Calculate layout
+        let appCountPerRow = config.columns
+        let maxRowsPerPage = Int(ceil(Double(config.itemsPerPage) / Double(appCountPerRow)))
+        let availableWidth = geo.size.width
+        let availableHeight = geo.size.height - (actualTopPadding + actualBottomPadding)
+        
+        let appHeight: CGFloat = {
+            let totalRowSpacing = config.rowSpacing * CGFloat(maxRowsPerPage - 1)
+            let height = (availableHeight - totalRowSpacing) / CGFloat(maxRowsPerPage)
+            return max(56, height)
+        }()
+
+        let columnWidth: CGFloat = {
+            let totalColumnSpacing = config.columnSpacing * CGFloat(appCountPerRow - 1)
+            let width = (availableWidth - totalColumnSpacing) / CGFloat(appCountPerRow)
+            return max(40, width)
+        }()
+
+        let iconSize: CGFloat = min(columnWidth, appHeight) * 0.8
+        
+        let result = (width: columnWidth, height: appHeight, iconSize: iconSize)
+        
+        // Cache the result
+        Self.layoutConfigCache[cacheKey] = result
+        Self.lastGeometryUpdate = now
+        
+        // Periodic cleanup to prevent unbounded growth
+        if Self.layoutConfigCache.count > 20 {
+            let keysToRemove = Array(Self.layoutConfigCache.keys.prefix(10))
+            for key in keysToRemove {
+                Self.layoutConfigCache.removeValue(forKey: key)
+            }
+        }
+        
+        return result
+    }
+
     fileprivate func captureGridGeometry(_ geo: GeometryProxy, columnWidth: CGFloat, appHeight: CGFloat, iconSize: CGFloat) {
         gridOriginInWindow = geo.frame(in: .global).origin
         currentContainerSize = geo.size

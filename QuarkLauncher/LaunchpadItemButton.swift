@@ -15,6 +15,7 @@ struct LaunchpadItemButton: View {
     @State private var isHovered = false
     @State private var lastTapTime = Date.distantPast
     @State private var forceRefreshTrigger: UUID = UUID()
+    @State private var cachedIcon: NSImage? = nil
     private let doubleTapThreshold: TimeInterval = 0.3
     
     private var effectiveScale: CGFloat {
@@ -44,26 +45,7 @@ struct LaunchpadItemButton: View {
         Button(action: handleTap) {
             VStack(spacing: 8) {
                 ZStack {
-                    let renderedIcon: NSImage = {
-                        switch item {
-                        case .app(let app):
-                            // Try to get icon from cache
-                            if let cachedIcon = AppCacheManager.shared.getCachedIcon(for: app.url.path), cachedIcon.size.width > 0, cachedIcon.size.height > 0 {
-                                return cachedIcon
-                            }
-                            // Use app's own icon or fallback to system icon
-                            let base = app.icon
-                            if base.size.width > 0 && base.size.height > 0 {
-                                return base
-                            } else {
-                                return NSWorkspace.shared.icon(forFile: app.url.path)
-                            }
-                        case .folder(let folder):
-                            return folder.icon(of: iconSize)
-                        case .empty:
-                            return item.icon
-                        }
-                    }()
+                    let renderedIcon: NSImage = getOptimizedIcon()
                     let isFolderIcon: Bool = {
                         if case .folder = item { return true } else { return false }
                     }()
@@ -117,5 +99,37 @@ struct LaunchpadItemButton: View {
         }
         
         lastTapTime = now
+    }
+    
+    // Optimized icon loading with caching
+    private func getOptimizedIcon() -> NSImage {
+        // Use cached icon if available
+        if let cached = cachedIcon {
+            return cached
+        }
+        
+        let icon: NSImage = {
+            switch item {
+            case .app(let app):
+                // Try to get icon from cache
+                if let cachedIcon = AppCacheManager.shared.getCachedIcon(for: app.url.path), cachedIcon.size.width > 0, cachedIcon.size.height > 0 {
+                    return cachedIcon
+                }
+                // Use app's own icon or fallback to system icon
+                let base = app.icon
+                if base.size.width > 0 && base.size.height > 0 {
+                    return base
+                } else {
+                    return NSWorkspace.shared.icon(forFile: app.url.path)
+                }
+            case .folder(let folder):
+                return folder.icon(of: iconSize)
+            case .empty:
+                return item.icon
+            }
+        }()
+        
+        cachedIcon = icon
+        return icon
     }
 }

@@ -121,10 +121,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func updateWindowMode(isFullscreen: Bool) {
         guard let window = window else { return }
         let screen = getCurrentActiveScreen() ?? NSScreen.main!
-        window.setFrame(isFullscreen ? screen.frame : calculateContentRect(for: screen), display: true)
-        window.hasShadow = !isFullscreen
-        window.contentAspectRatio = isFullscreen ? NSSize(width: 0, height: 0) : NSSize(width: 4, height: 3)
-        applyCornerRadius()
+        
+        // Optimize window transition with animation and reduced redraws
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.25
+            context.allowsImplicitAnimation = true
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            
+            window.animator().setFrame(isFullscreen ? screen.frame : calculateContentRect(for: screen), display: false)
+            window.hasShadow = !isFullscreen
+            window.contentAspectRatio = isFullscreen ? NSSize(width: 0, height: 0) : NSSize(width: 4, height: 3)
+        } completionHandler: { [weak self] in
+            // Apply visual changes after animation completes
+            self?.applyCornerRadius()
+            window.display()
+        }
     }
     
     private func applyCornerRadius() {

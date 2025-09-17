@@ -286,6 +286,33 @@ final class AppCacheManager: ObservableObject {
         cacheLock.unlock()
         cacheSize = iconSize + appInfoSize + gridLayoutSize
     }
+    
+    /// Optimize cache for fullscreen mode transitions
+    func optimizeForFullscreenTransition(items: [LaunchpadItem]) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            
+            // Preload critical icons for visible items
+            let criticalItems = Array(items.prefix(35)) // First page items
+            let apps = criticalItems.compactMap { item -> AppInfo? in
+                if case .app(let app) = item {
+                    return app
+                }
+                return nil
+            }
+            
+            // Cache critical icons with higher priority
+            self.cacheLock.lock()
+            for app in apps {
+                let key = self.cacheKeyGenerator.generateIconKey(for: app.url.path)
+                if self.iconCache[key] == nil {
+                    self.iconCache[key] = app.icon
+                    self.iconCacheOrder.append(key)
+                }
+            }
+            self.cacheLock.unlock()
+        }
+    }
 
     
     /// Get performance statistics
