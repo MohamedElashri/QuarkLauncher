@@ -198,7 +198,6 @@ struct FolderView: View {
                         )
                     }
                 }
-                
                 .animation(LNAnimations.gridUpdate, value: pendingDropIndex)
                 .animation(LNAnimations.gridUpdate, value: folder.apps)
                 .id(forceRefreshTrigger) // Use forceRefreshTrigger to force refresh app grid
@@ -218,11 +217,9 @@ struct FolderView: View {
             .onChange(of: geo.size) {
                 columnsCount = desiredColumns
             }
-
-                        }
             
             // Drag preview layer
-            if draggingApp != nil {
+            if let draggingApp {
                 DragPreviewItem(item: .app(draggingApp),
                                 iconSize: iconSize,
                                 labelWidth: labelWidth,
