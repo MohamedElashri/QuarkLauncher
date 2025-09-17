@@ -24,12 +24,16 @@ struct LaunchpadApp: App {
         .commands {
             CommandGroup(replacing: .appInfo) {
                 Button("About QuarkLauncher") {
-                    AppDelegate.shared?.showAboutAction()
+                    DispatchQueue.main.async {
+                        AppDelegate.shared?.showAboutAction()
+                    }
                 }
             }
             CommandGroup(replacing: .appSettings) {
                 Button("Preferences...") {
-                    AppDelegate.shared?.showSettingsAction()
+                    DispatchQueue.main.async {
+                        AppDelegate.shared?.showSettingsAction()
+                    }
                 }
                 .keyboardShortcut(",")
             }
@@ -45,13 +49,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var lastShowAt: Date?
     private var cancellables = Set<AnyCancellable>()
     private var isShowingAboutDialog = false
+    private var lastMenuActionTime: Date = Date.distantPast
+    private let menuActionThrottle: TimeInterval = 0.3 // Prevent rapid clicks
     
     let appStore = AppStore()
     var modelContainer: ModelContainer?
     
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    override init() {
+        super.init()
+        // Set shared instance immediately during initialization
         Self.shared = self
-        
+    }
+    
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // shared is already set in init(), so we can proceed with setup
         setupWindow()
         appStore.performInitialScanIfNeeded()
         appStore.startAutoRescan()
@@ -60,23 +71,46 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     
     @objc func showAboutAction() {
+        // Throttle rapid menu clicks
+        let now = Date()
+        guard now.timeIntervalSince(lastMenuActionTime) > menuActionThrottle else { return }
+        lastMenuActionTime = now
+        
+        // Prevent multiple dialogs
+        guard !isShowingAboutDialog else { return }
+        
         isShowingAboutDialog = true
-        let alert = NSAlert()
-        alert.messageText = "QuarkLauncher"
-        alert.informativeText = """
-        Version \(getVersion())
         
-        
-        Email: app@elashri.com
-        Website: melashri.net/QuarkLauncher
-        
-        © 2025 Mohamed Elashri
-        """
-        alert.alertStyle = .informational
-        alert.icon = NSApplication.shared.applicationIconImage
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
-        isShowingAboutDialog = false
+        // Create and configure alert on main thread but make it non-blocking
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            let alert = NSAlert()
+            alert.messageText = "QuarkLauncher"
+            alert.informativeText = """
+            Version \(self.getVersion())
+            
+            
+            Email: app@elashri.com
+            Website: melashri.net/QuarkLauncher
+            
+            © 2025 Mohamed Elashri
+            """
+            alert.alertStyle = .informational
+            alert.icon = NSApplication.shared.applicationIconImage
+            alert.addButton(withTitle: "OK")
+            
+            // Use beginSheetModal for non-blocking behavior
+            if let window = self.window {
+                alert.beginSheetModal(for: window) { _ in
+                    self.isShowingAboutDialog = false
+                }
+            } else {
+                // Fallback to modal if no window available
+                alert.runModal()
+                self.isShowingAboutDialog = false
+            }
+        }
     }
     
     private func getVersion() -> String {
@@ -84,7 +118,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     
     @objc func showSettingsAction() {
-        showSettings()
+        // Throttle rapid menu clicks
+        let now = Date()
+        guard now.timeIntervalSince(lastMenuActionTime) > menuActionThrottle else { return }
+        lastMenuActionTime = now
+        
+        // Ensure we're on the main thread and the app is ready
+        DispatchQueue.main.async { [weak self] in
+            self?.showSettings()
+        }
     }
     
     func applicationShouldShowAbout(_ application: NSApplication) -> Bool {
@@ -152,22 +194,40 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     
     func showSettings() {
+        // Quick state update first
         appStore.isSetting = true
+        
+        // Then show the window - this is now more responsive since state change happens immediately
         showWindow()
     }
     
     func showWindow() {
         guard let window = window else { return }
+        
+        // Cache frequently accessed values to reduce computation
         let screen = getCurrentActiveScreen() ?? NSScreen.main!
         let rect = appStore.isFullscreenMode ? screen.frame : calculateContentRect(for: screen)
-        window.setFrame(rect, display: true)
-        applyCornerRadius()
-        window.makeKey()
-        lastShowAt = Date()
-        NotificationCenter.default.post(name: .launchpadWindowShown, object: nil)
-        window.makeKeyAndOrderFront(nil)
-        window.collectionBehavior = [.transient, .canJoinAllApplications, .fullScreenAuxiliary, .ignoresCycle]
-        window.orderFrontRegardless()
+        
+        // Batch window operations to minimize redraws
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.1 // Even faster animation for immediate response
+            context.allowsImplicitAnimation = true
+            
+            window.setFrame(rect, display: false) // Don't display immediately
+            applyCornerRadius()
+            
+            // Set properties that don't require redraw
+            window.collectionBehavior = [.transient, .canJoinAllApplications, .fullScreenAuxiliary, .ignoresCycle]
+        } completionHandler: {
+            // Do final operations after animation
+            window.makeKey()
+            window.makeKeyAndOrderFront(nil)
+            window.orderFrontRegardless()
+            
+            // Update state and post notifications last
+            self.lastShowAt = Date()
+            NotificationCenter.default.post(name: .launchpadWindowShown, object: nil)
+        }
     }
     
     func hideWindow() {
