@@ -18,9 +18,7 @@ struct SettingsView: View {
                         .font(.footnote)
                     Spacer()
                     Button {
-                        withAnimation(LNAnimations.springSnappy) {
-                            appStore.isSetting = false
-                        }
+                        appStore.isSetting = false
                     } label: {
                         Image(systemName: "xmark")
                             .font(.title2.bold())
@@ -57,7 +55,6 @@ struct SettingsView: View {
                         Spacer()
                         Toggle(isOn: $appStore.isFullscreenMode) {}
                             .toggleStyle(.switch)
-                            .animation(LNAnimations.springSnappy, value: appStore.isFullscreenMode)
                     }
                     .padding()
                     .background(Color(.controlBackgroundColor).opacity(0.3))

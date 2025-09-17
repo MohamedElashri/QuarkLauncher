@@ -55,16 +55,8 @@ struct LaunchpadView: View {
     @State private var currentAppHeight: CGFloat = 0
     @State private var currentIconSize: CGFloat = 0
     
-    // Performance optimization: use static cache to avoid state modification issues
-    private static var geometryCache: [String: CGPoint] = [:]
-    private static var lastGeometryUpdate: Date = Date.distantPast
-    private static var layoutConfigCache: [String: (width: CGFloat, height: CGFloat, iconSize: CGFloat)] = [:]
-    private let geometryCacheTimeout: TimeInterval = 0.1 // 100ms cache timeout
-    private let layoutCacheTimeout: TimeInterval = 0.5 // 500ms cache timeout for layout calculations
-    
-    // Performance monitoring
-    @State private var performanceMetrics: [String: TimeInterval] = [:]
-    private let enablePerformanceMonitoring = false // Set to true to enable performance monitoring
+    // Simplified geometry caching - removed complex caching system for better performance
+    private static var simpleLayoutCache: (size: CGSize, isFullscreen: Bool, result: (width: CGFloat, height: CGFloat, iconSize: CGFloat))? = nil
     @State private var isHandoffDragging: Bool = false
     @State private var isUserSwiping: Bool = false
     @State private var accumulatedScrollX: CGFloat = 0
@@ -206,12 +198,9 @@ struct LaunchpadView: View {
                     Spacer()
                     
                     Button {
-                        withAnimation(LNAnimations.springSnappy) {
-                            appStore.isSetting = true
-                        }
+                        appStore.isSetting = true
                     } label: {
                         Image(systemName: "ellipsis.circle")
-
                             .font(.title)
                             .foregroundStyle(.placeholder.opacity(0.5))
                     }
@@ -1057,26 +1046,8 @@ extension LaunchpadView {
                             pageIndex: Int,
                             columnWidth: CGFloat,
                             appHeight: CGFloat) -> CGPoint {
-        // Performance optimization: use cache to avoid repeated calculations
-        let cacheKey = "center_\(globalIndex)_\(pageIndex)_\(containerSize.width)_\(containerSize.height)_\(columnWidth)_\(appHeight)"
-        
-        // Check cache validity
-        let now = Date()
-        if now.timeIntervalSince(Self.lastGeometryUpdate) < geometryCacheTimeout,
-           let cached = Self.geometryCache[cacheKey] {
-            return cached
-        }
-        
         let origin = cellOrigin(for: globalIndex, in: containerSize, pageIndex: pageIndex, columnWidth: columnWidth, appHeight: appHeight)
-        let center = CGPoint(x: origin.x + columnWidth / 2, y: origin.y + appHeight / 2)
-        
-        // Asynchronously update the cache to avoid modifying the state during view updates
-        DispatchQueue.main.async {
-            Self.geometryCache[cacheKey] = center
-            Self.lastGeometryUpdate = now
-        }
-        
-        return center
+        return CGPoint(x: origin.x + columnWidth / 2, y: origin.y + appHeight / 2)
     }
 
     private func indexAt(point: CGPoint,
@@ -1112,22 +1083,6 @@ extension LaunchpadView {
                                       columnWidth: CGFloat,
                                       appHeight: CGFloat,
                                       iconSize: CGFloat) -> Bool {
-        // Performance optimization: use cache to avoid repeated calculations
-        let cacheKey = "centerArea_\(targetIndex)_\(pageIndex)_\(containerSize.width)_\(containerSize.height)_\(columnWidth)_\(appHeight)_\(iconSize)"
-        
-        let now = Date()
-        if now.timeIntervalSince(Self.lastGeometryUpdate) < geometryCacheTimeout,
-           let cached = Self.geometryCache[cacheKey] {
-            let centerAreaSize = iconSize * 1.6
-            let centerAreaRect = CGRect(
-                x: cached.x - centerAreaSize / 2,
-                y: cached.y - centerAreaSize / 2,
-                width: centerAreaSize,
-                height: centerAreaSize
-            )
-            return centerAreaRect.contains(point)
-        }
-        
         let targetCenter = cellCenter(for: targetIndex, in: containerSize, pageIndex: pageIndex, columnWidth: columnWidth, appHeight: appHeight)
         let scale: CGFloat = 1.6
         let centerAreaSize = iconSize * scale
@@ -1137,13 +1092,6 @@ extension LaunchpadView {
             width: centerAreaSize,
             height: centerAreaSize
         )
-        
-        // Asynchronously update the cache to avoid modifying the state during view updates
-        DispatchQueue.main.async {
-            Self.geometryCache[cacheKey] = targetCenter
-            Self.lastGeometryUpdate = now
-        }
-        
         return centerAreaRect.contains(point)
     }
 }
@@ -1156,7 +1104,7 @@ extension LaunchpadView {
                               isMomentum: Bool,
                               isPrecise: Bool,
                               pageWidth: CGFloat) {
-        guard !isFolderOpen && !appStore.isSetting else { return }
+        guard !isFolderOpen && !appStore.isSetting else { return } // Check both folder and settings state
         // Mouse wheel (non-precise): accumulate distance; apply small cooldown to avoid multi-page flips
         if !isPrecise {
             // Map vertical wheel to horizontal direction like precise scroll
@@ -1166,22 +1114,20 @@ extension LaunchpadView {
             if wheelLastDirection != direction { wheelAccumulatedSinceFlip = 0 }
             wheelLastDirection = direction
             wheelAccumulatedSinceFlip += abs(primaryDelta)
-            let threshold: CGFloat = 2.0 / CGFloat(appStore.scrollSensitivity / 0.15) // 根据灵敏度调整鼠标滚轮阈值
+            let threshold: CGFloat = 2.0 / CGFloat(appStore.scrollSensitivity / 0.15)
             let now = Date()
             if wheelAccumulatedSinceFlip >= threshold {
                 if let last = wheelLastFlipAt, now.timeIntervalSince(last) < wheelFlipCooldown { return }
                 if direction > 0 { navigateToNextPage() } else { navigateToPreviousPage() }
                 wheelLastFlipAt = now
-                // reset accumulation so one wheel tick only flips once
                 wheelAccumulatedSinceFlip = 0
             }
             return
         }
 
         // Trackpad precise scroll: accumulate and flip after threshold
-        // Ignore momentum phase to ensure only one flip per gesture
         if isMomentum { return }
-        let delta = abs(deltaX) >= abs(deltaY) ? deltaX : -deltaY // vertical swipes map to horizontal
+        let delta = abs(deltaX) >= abs(deltaY) ? deltaX : -deltaY
         switch phase {
         case .began:
             isUserSwiping = true
@@ -1190,9 +1136,6 @@ extension LaunchpadView {
             isUserSwiping = true
             accumulatedScrollX += delta
         case .ended, .cancelled:
-            // Make the threshold smaller with higher sensitivity for intuitive feel (consistent with mouse wheel)
-            // Normalize to default value 0.15: threshold = pageWidth * (0.0225 / sensitivity)
-            // When sensitivity=0.15, threshold is 0.15*pageWidth; larger sensitivity means more responsive (smaller threshold)
             let threshold = pageWidth * (0.0225 / max(appStore.scrollSensitivity, 0.001))
             if accumulatedScrollX <= -threshold {
                 navigateToNextPage()
@@ -1300,15 +1243,12 @@ extension LaunchpadView {
 
 // MARK: - Geometry & Drag helpers
 extension LaunchpadView {
-    // Optimized layout calculation with caching
+    // Simplified layout calculation - removed complex caching for better performance
     private func calculateOptimizedLayout(for geo: GeometryProxy, actualTopPadding: CGFloat, actualBottomPadding: CGFloat) -> (width: CGFloat, height: CGFloat, iconSize: CGFloat) {
-        let cacheKey = "\(geo.size.width)x\(geo.size.height)_\(config.isFullscreen)_\(actualTopPadding)_\(actualBottomPadding)"
-        let now = Date()
-        
-        // Check cache first
-        if let cached = Self.layoutConfigCache[cacheKey],
-           now.timeIntervalSince(Self.lastGeometryUpdate) < layoutCacheTimeout {
-            return cached
+        // Simple cache check based on size and fullscreen state only
+        if let cache = Self.simpleLayoutCache,
+           cache.size == geo.size && cache.isFullscreen == config.isFullscreen {
+            return cache.result
         }
         
         // Calculate layout
@@ -1330,21 +1270,10 @@ extension LaunchpadView {
         }()
 
         let iconSize: CGFloat = min(columnWidth, appHeight) * 0.8
-        
         let result = (width: columnWidth, height: appHeight, iconSize: iconSize)
         
-        // Cache the result
-        Self.layoutConfigCache[cacheKey] = result
-        Self.lastGeometryUpdate = now
-        
-        // Periodic cleanup to prevent unbounded growth
-        if Self.layoutConfigCache.count > 20 {
-            let keysToRemove = Array(Self.layoutConfigCache.keys.prefix(10))
-            for key in keysToRemove {
-                Self.layoutConfigCache.removeValue(forKey: key)
-            }
-        }
-        
+        // Update simple cache
+        Self.simpleLayoutCache = (size: geo.size, isFullscreen: config.isFullscreen, result: result)
         return result
     }
 
@@ -1354,16 +1283,6 @@ extension LaunchpadView {
         currentColumnWidth = columnWidth
         currentAppHeight = appHeight
         currentIconSize = iconSize
-        
-        // Clear old cache entries periodically to prevent unbounded growth
-        let now = Date()
-        if now.timeIntervalSince(Self.lastGeometryUpdate) > geometryCacheTimeout * 2 {
-            // Asynchronously clear the cache to avoid modifying the state during view updates
-            DispatchQueue.main.async {
-                Self.geometryCache.removeAll()
-                Self.lastGeometryUpdate = now
-            }
-        }
     }
 
     fileprivate func flipPageIfNeeded(at point: CGPoint, in containerSize: CGSize) -> Bool {
@@ -1711,28 +1630,17 @@ extension LaunchpadView {
         }
     }
 
-    // Unified drag update logic (common for normal drag and relay drag)
+    // Simplified drag update logic (common for normal drag and relay drag)
     private func applyDragUpdate(at point: CGPoint,
                                  containerSize: CGSize,
                                  columnWidth: CGFloat,
                                  appHeight: CGFloat,
                                  iconSize: CGFloat) {
-        // Performance optimization: reduce frequent position updates
+        // Simple movement threshold to reduce update frequency
         let distance = sqrt(pow(dragPreviewPosition.x - point.x, 2) + pow(dragPreviewPosition.y - point.y, 2))
-        if distance < 2.0 { return } // If the movement distance is less than 2 pixels, skip the update
+        if distance < 3.0 { return } // If movement is less than 3 pixels, skip update
         
         dragPreviewPosition = point
-        
-        // Performance optimization: Use throttling to reduce calculation frequency
-        let now = Date()
-        if now.timeIntervalSince(Self.lastGeometryUpdate) < 0.016 { // 约60fps
-            return
-        }
-        
-        // Asynchronously update the last geometry update time to avoid modifying state during view updates
-        DispatchQueue.main.async {
-            Self.lastGeometryUpdate = now
-        }
         
         if let hoveringIndex = indexAt(point: dragPreviewPosition,
                                        in: containerSize,
@@ -1856,22 +1764,6 @@ extension LaunchpadView {
         pendingDropIndex = nil
         folderHoverCandidateIndex = nil
         folderHoverBeganAt = nil
-    }
-    
-    // Performance monitoring helper function
-    private func measurePerformance<T>(_ operation: String, _ block: () -> T) -> T {
-        guard enablePerformanceMonitoring else { return block() }
-        
-        let startTime = CFAbsoluteTimeGetCurrent()
-        let result = block()
-        let timeElapsed = CFAbsoluteTimeGetCurrent() - startTime
-        
-        performanceMetrics[operation] = timeElapsed
-        if timeElapsed > 0.016 { // Exceeds 16ms (60fps threshold)
-            print("⚠️ Performance Warning: \(operation) took \(String(format: "%.3f", timeElapsed * 1000))ms")
-        }
-        
-        return result
     }
 }
 
