@@ -16,7 +16,26 @@ class BorderlessWindow: NSWindow {
 @main
 struct LaunchpadApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    var body: some Scene { Settings {} }
+    
+    var body: some Scene {
+        WindowGroup {
+            EmptyView()
+        }
+        .windowStyle(HiddenTitleBarWindowStyle())
+        .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About QuarkLauncher") {
+                    AppDelegate.shared?.showAboutAction()
+                }
+            }
+            CommandGroup(replacing: .appSettings) {
+                Button("Preferences...") {
+                    AppDelegate.shared?.showSettingsAction()
+                }
+                .keyboardShortcut(",")
+            }
+        }
+    }
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
@@ -38,6 +57,42 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         appStore.startAutoRescan()
         
         if appStore.isFullscreenMode { updateWindowMode(isFullscreen: true) }
+    }
+    
+    @objc func showAboutAction() {
+        let alert = NSAlert()
+        alert.messageText = "QuarkLauncher"
+        alert.informativeText = """
+        Version \(getVersion())
+        
+        
+        Email: app@elashri.com
+        Website: melashri.net/QuarkLauncher
+        
+        © 2025 Mohamed Elashri
+        """
+        alert.alertStyle = .informational
+        alert.icon = NSApplication.shared.applicationIconImage
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+    
+    private func getVersion() -> String {
+        return Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+    }
+    
+    @objc func showSettingsAction() {
+        showSettings()
+    }
+    
+    func applicationShouldShowAbout(_ application: NSApplication) -> Bool {
+        showAboutAction()
+        return false
+    }
+    
+    func applicationShouldOpenPreferences(_ application: NSApplication) -> Bool {
+        showSettingsAction()
+        return false
     }
     
     private func setupWindow() {
@@ -94,6 +149,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
     
+    func showSettings() {
+        appStore.isSetting = true
+        showWindow()
+    }
+    
     func showWindow() {
         guard let window = window else { return }
         let screen = getCurrentActiveScreen() ?? NSScreen.main!
@@ -139,7 +199,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 contentView.layer?.cornerRadius = isFullscreen ? 0 : 30
                 contentView.layer?.masksToBounds = true
             }
-        } completionHandler: { [weak self] in
+        } completionHandler: {
             // Final display update after animation completes
             window.display()
         }
