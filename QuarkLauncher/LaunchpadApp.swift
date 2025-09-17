@@ -122,18 +122,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         guard let window = window else { return }
         let screen = getCurrentActiveScreen() ?? NSScreen.main!
         
-        // Optimize window transition with animation and reduced redraws
+        // Optimized window transition with faster, smoother animation
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.25
+            context.duration = 0.15 // Reduced from 0.25 for snappier feel
             context.allowsImplicitAnimation = true
-            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut) // Better timing function
             
+            // Apply all visual changes together for smoother transition
             window.animator().setFrame(isFullscreen ? screen.frame : calculateContentRect(for: screen), display: false)
             window.hasShadow = !isFullscreen
             window.contentAspectRatio = isFullscreen ? NSSize(width: 0, height: 0) : NSSize(width: 4, height: 3)
+            
+            // Apply corner radius changes immediately during animation
+            if let contentView = window.contentView {
+                contentView.wantsLayer = true
+                contentView.layer?.cornerRadius = isFullscreen ? 0 : 30
+                contentView.layer?.masksToBounds = true
+            }
         } completionHandler: { [weak self] in
-            // Apply visual changes after animation completes
-            self?.applyCornerRadius()
+            // Final display update after animation completes
             window.display()
         }
     }

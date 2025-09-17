@@ -1551,41 +1551,27 @@ final class AppStore: ObservableObject {
     
     @Published private var isGridRefreshing = false
     
-    // Optimized fullscreen mode transition with debouncing and batched updates
+    // Optimized fullscreen mode transition with immediate visual feedback
     private func performFullscreenModeTransition() {
         // Cancel any existing timer
         fullscreenTransitionTimer?.invalidate()
         
-        // Debounce rapid toggles
-        fullscreenTransitionTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { [weak self] _ in
+        // Immediate response for better UX - no debouncing delay
+        DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             
-            DispatchQueue.main.async {
-                // Step 1: Update window mode first (fastest operation)
-                if let appDelegate = AppDelegate.shared {
-                    appDelegate.updateWindowMode(isFullscreen: self.isFullscreenMode)
-                }
-                
-                // Step 2: Defer expensive grid operations until after window transition
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    // Batch the expensive operations
-                    self.performBatchedGridUpdate()
-                }
+            // Step 1: Prepare for transition (optimize before animation starts)
+            AppCacheManager.shared.optimizeForFullscreenTransition(items: self.items)
+            
+            // Step 2: Start window animation immediately
+            if let appDelegate = AppDelegate.shared {
+                appDelegate.updateWindowMode(isFullscreen: self.isFullscreenMode)
             }
+            
+            // Step 3: Trigger smooth content animation with the window
+            self.triggerGridRefresh()
         }
     }
-    
-    // Perform batched grid updates to minimize UI churn
-    private func performBatchedGridUpdate() {
-        // Optimize cache for better performance
-        AppCacheManager.shared.optimizeForFullscreenTransition(items: items)
-        
-        // Only trigger grid refresh if necessary
-        DispatchQueue.main.async { [weak self] in
-            self?.triggerGridRefresh()
-        }
-    }
-    
     
     // Clear all persisted sorting and folder data
     private func clearAllPersistedData() {

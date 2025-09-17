@@ -206,7 +206,9 @@ struct LaunchpadView: View {
                     Spacer()
                     
                     Button {
-                        appStore.isSetting = true
+                        withAnimation(LNAnimations.springSnappy) {
+                            appStore.isSetting = true
+                        }
                     } label: {
                         Image(systemName: "ellipsis.circle")
 
@@ -281,6 +283,7 @@ struct LaunchpadView: View {
                                         }
                                         .animation(LNAnimations.gridUpdate, value: pendingDropIndex)
                                         .animation(LNAnimations.gridUpdate, value: appStore.gridRefreshTrigger)
+                                        .animation(LNAnimations.fullscreenTransition, value: appStore.isFullscreenMode)
                                         .frame(maxHeight: .infinity, alignment: .top)
                                     }
                                     .frame(width: geo.size.width, height: geo.size.height)
