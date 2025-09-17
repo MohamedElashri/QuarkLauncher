@@ -44,6 +44,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private let minimumContentSize = NSSize(width: 800, height: 600)
     private var lastShowAt: Date?
     private var cancellables = Set<AnyCancellable>()
+    private var isShowingAboutDialog = false
     
     let appStore = AppStore()
     var modelContainer: ModelContainer?
@@ -59,6 +60,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     
     @objc func showAboutAction() {
+        isShowingAboutDialog = true
         let alert = NSAlert()
         alert.messageText = "QuarkLauncher"
         alert.informativeText = """
@@ -74,6 +76,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         alert.icon = NSApplication.shared.applicationIconImage
         alert.addButton(withTitle: "OK")
         alert.runModal()
+        isShowingAboutDialog = false
     }
     
     private func getVersion() -> String {
@@ -233,7 +236,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func windowDidResignKey(_ notification: Notification) { autoHideIfNeeded() }
     func windowDidResignMain(_ notification: Notification) { autoHideIfNeeded() }
     private func autoHideIfNeeded() {
-        guard !appStore.isSetting else { return }
+        guard !appStore.isSetting && !isShowingAboutDialog else { return }
         hideWindow()
     }
     
