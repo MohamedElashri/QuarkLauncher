@@ -2118,8 +2118,8 @@ final class AppStore: ObservableObject {
         currentPage = 0
         if !searchText.isEmpty { searchText = "" }
 
-        // Do not reset hasAppliedOrderFromStore, keep layout data
-        hasPerformedInitialScan = true
+        // Reset scan flag to force re-scan
+        hasPerformedInitialScan = false
 
         // Execute the same scan paths as the first launch (keep existing order, new ones at the end)
         scanApplicationsWithOrderPreservation()
