@@ -8,173 +8,267 @@ struct SettingsView: View {
     @State private var showResetConfirm = false
 
     var body: some View {
-        VStack {
-            HStack(alignment: .firstTextBaseline) {
-                Text("QuarkLauncher")
-                    .font(.title)
-                Text("v\(getVersion())")
-                    .font(.footnote)
-                Spacer()
-                Button {
-                    appStore.isSetting = false
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.title2.bold())
-                        .foregroundStyle(.placeholder)
+        ScrollView {
+            VStack(spacing: 20) {
+                // Header
+                HStack(alignment: .firstTextBaseline) {
+                    Text("QuarkLauncher")
+                        .font(.title)
+                    Text("v\(getVersion())")
+                        .font(.footnote)
+                    Spacer()
+                    Button {
+                        appStore.isSetting = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.title2.bold())
+                            .foregroundStyle(.placeholder)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-            }
-            .padding()
-            
-            VStack {
-                HStack {
+                .padding()
+                
+                // Background info
+                VStack(alignment: .leading, spacing: 8) {
                     Text("Automatically run on background: add QuarkLauncher to dock or use keyboard shortcuts to open the application window")
-                    Spacer()
-                }
-            }
-            .padding()
-
-            Divider()
-            
-            VStack {
-                HStack {
-                    Text("Classic Launchpad (Fullscreen)")
-                    Spacer()
-                    Toggle(isOn: $appStore.isFullscreenMode) {
-                        
-                    }
-                    .toggleStyle(.switch)
-                }
-                HStack {
-                    Text("Scrolling sensitivity")
-                    VStack {
-                        Slider(value: $appStore.scrollSensitivity, in: 0.01...0.99)
-                        HStack {
-                            Text("Low")
-                                .font(.footnote)
-                            Spacer()
-                            Text("High")
-                                .font(.footnote)
-                        }
-                    }
-                }
-                
-                Divider()
-                    .padding(.vertical)
-                
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Page Navigation Shortcuts")
-                        .font(.headline)
-                    
-                    HStack {
-                        Text("Current shortcuts:")
-                        Text(appStore.navigationKeysDescription())
-                            .font(.system(.body, design: .monospaced))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(.secondary.opacity(0.2))
-                            .cornerRadius(6)
-                        Spacer()
-                    }
-                    
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text("Previous Page")
-                                .font(.subheadline)
-                            Picker("Previous Page Key", selection: $appStore.previousPageKey) {
-                                Text("← Left Arrow").tag(UInt16(123))
-                                Text("↑ Up Arrow").tag(UInt16(126))
-                                Text("Tab").tag(UInt16(48))
-                            }
-                            .pickerStyle(.menu)
-                        }
-                        
-                        Spacer()
-                        
-                        VStack(alignment: .leading) {
-                            Text("Next Page")
-                                .font(.subheadline)
-                            Picker("Next Page Key", selection: $appStore.nextPageKey) {
-                                Text("→ Right Arrow").tag(UInt16(124))
-                                Text("↓ Down Arrow").tag(UInt16(125))
-                                Text("Space").tag(UInt16(49))
-                            }
-                            .pickerStyle(.menu)
-                        }
-                    }
-                    
-                    HStack {
-                        Text("Require Shift modifier")
-                        Spacer()
-                        Toggle(isOn: $appStore.useShiftModifier) {
-                            
-                        }
-                        .toggleStyle(.switch)
-                    }
-
-                    Text("When choosing shift modifier, you will need to hold the Shift key + your chosen key.")
-                        .font(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .multilineTextAlignment(.leading)
                         .foregroundStyle(.secondary)
                 }
-            }
-            .padding()
-            
-            Divider()
-            
-            HStack {
-                Button {
-                    exportDataFolder()
-                } label: {
-                    Label("Export Data", systemImage: "square.and.arrow.up")
-                }
+                .padding()
 
-                Button {
-                    importDataFolder()
-                } label: {
-                    Label("Import Data", systemImage: "square.and.arrow.down")
-                }
-            }
-            .padding()
-            
-            Divider()
-
-            HStack {
-                Button {
-                    appStore.refresh()
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
-
-                Spacer()
-
-                Button {
-                    showResetConfirm = true
-                } label: {
-                    Label("Reset Layout", systemImage: "arrow.counterclockwise")
-                        .foregroundStyle(Color.red)
-                }
-                .alert("Confirm to reset layout?", isPresented: $showResetConfirm) {
-                    Button("Reset", role: .destructive) { appStore.resetLayout() }
-                    Button("Cancel", role: .cancel) {}
-                } message: {
-                    Text("This will completely reset the layout: remove all folders, clear saved order, and rescan all applications. All customizations will be lost.")
-                }
+                Divider()
+                
+                // Main settings
+                VStack(spacing: 20) {
+                    // Fullscreen mode toggle
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Classic Launchpad (Fullscreen)")
+                                .fontWeight(.medium)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text("Expands to full screen mode similar to macOS Launchpad")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer()
+                        Toggle(isOn: $appStore.isFullscreenMode) {}
+                            .toggleStyle(.switch)
+                    }
+                    .padding()
+                    .background(Color(.controlBackgroundColor).opacity(0.3))
+                    .cornerRadius(12)
+                    
+                    // Scrolling sensitivity
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Scrolling sensitivity")
+                                .fontWeight(.medium)
+                            Spacer()
+                        }
+                        VStack(spacing: 8) {
+                            Slider(value: $appStore.scrollSensitivity, in: 0.01...0.99)
+                            HStack {
+                                Text("Low")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text("High")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .padding()
+                    .background(Color(.controlBackgroundColor).opacity(0.3))
+                    .cornerRadius(12)
+                    
+                    // Page Navigation Shortcuts
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Page Navigation Shortcuts")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                        
+                        // Current shortcuts display
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Current shortcuts:")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Text(appStore.navigationKeysDescription())
+                                .font(.system(.body, design: .monospaced))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Color(.textBackgroundColor))
+                                .cornerRadius(8)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color(.separatorColor), lineWidth: 1)
+                                )
+                        }
+                        
+                        // Key selection
+                        VStack(spacing: 16) {
+                            HStack(spacing: 16) {
+                                // Previous page key
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Previous Page")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                    
+                                    Picker("Previous Page Key", selection: $appStore.previousPageKey) {
+                                        Text("← Left Arrow").tag(UInt16(123))
+                                        Text("↑ Up Arrow").tag(UInt16(126))
+                                        Text("⇥ Tab").tag(UInt16(48))
+                                    }
+                                    .pickerStyle(.menu)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(10)
+                                    .background(Color(.controlBackgroundColor))
+                                    .cornerRadius(8)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(Color(.separatorColor), lineWidth: 1)
+                                    )
+                                }
                                 
-                Button {
-                    exit(0)
-                } label: {
-                    Label("Quit", systemImage: "xmark.circle")
-                        .foregroundStyle(Color.red)
+                                // Next page key
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Next Page")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                    
+                                    Picker("Next Page Key", selection: $appStore.nextPageKey) {
+                                        Text("→ Right Arrow").tag(UInt16(124))
+                                        Text("↓ Down Arrow").tag(UInt16(125))
+                                        Text("⎵ Space").tag(UInt16(49))
+                                    }
+                                    .pickerStyle(.menu)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(10)
+                                    .background(Color(.controlBackgroundColor))
+                                    .cornerRadius(8)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(Color(.separatorColor), lineWidth: 1)
+                                    )
+                                }
+                            }
+                            
+                            // Shift modifier setting
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Require Shift modifier")
+                                        .fontWeight(.medium)
+                                    Text("When enabled, you will need to hold the Shift key + your chosen key.")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                Spacer()
+                                Toggle(isOn: $appStore.useShiftModifier) {}
+                                    .toggleStyle(.switch)
+                            }
+                            .padding(12)
+                            .background(Color(.controlBackgroundColor).opacity(0.5))
+                            .cornerRadius(8)
+                        }
+                    }
+                    .padding()
+                    .background(Color(.controlBackgroundColor).opacity(0.3))
+                    .cornerRadius(12)
                 }
-            }
-            .padding()
+                .padding()
+                
+                Divider()
 
+                // Data import/export
+                VStack(spacing: 12) {
+                    Text("Data Management")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    HStack(spacing: 16) {
+                        Button {
+                            exportDataFolder()
+                        } label: {
+                            Label("Export Data", systemImage: "square.and.arrow.up")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+
+                        Button {
+                            importDataFolder()
+                        } label: {
+                            Label("Import Data", systemImage: "square.and.arrow.down")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                    }
+                }
+                .padding()
+                
+                Divider()
+
+                // Actions
+                VStack(spacing: 12) {
+                    Text("Actions")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    VStack(spacing: 12) {
+                        Button {
+                            appStore.refresh()
+                        } label: {
+                            Label("Refresh Apps", systemImage: "arrow.clockwise")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+
+                        Button {
+                            showResetConfirm = true
+                        } label: {
+                            Label("Reset Layout", systemImage: "arrow.counterclockwise")
+                                .foregroundStyle(Color.red)
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+                        .alert("Confirm to reset layout?", isPresented: $showResetConfirm) {
+                            Button("Reset", role: .destructive) { appStore.resetLayout() }
+                            Button("Cancel", role: .cancel) {}
+                        } message: {
+                            Text("This will completely reset the layout: remove all folders, clear saved order, and rescan all applications. All customizations will be lost.")
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                                        
+                        Button {
+                            exit(0)
+                        } label: {
+                            Label("Quit QuarkLauncher", systemImage: "xmark.circle")
+                                .foregroundStyle(Color.red)
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+                    }
+                }
+                .padding()
+                
+                Spacer(minLength: 20)
+            }
         }
-        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.windowBackgroundColor))
     }
     
     func getVersion() -> String {
-            return Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
+        return Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
     }
 
     // MARK: - Export / Import Application Support Data
