@@ -3,6 +3,7 @@ import AppKit
 import Combine
 import SwiftData
 import UniformTypeIdentifiers
+import CoreServices
 
 final class AppStore: ObservableObject {
     @Published var apps: [AppInfo] = []
@@ -95,7 +96,17 @@ final class AppStore: ObservableObject {
         "/Applications",
         "\(NSHomeDirectory())/Applications",
         "/System/Applications",
-        "/System/Cryptexes/App/System/Applications"
+        "/System/Cryptexes/App/System/Applications",
+        "/Library/Developer/Applications",
+        "/Developer/Applications",
+        "/Network/Applications"
+    ]
+    
+    private let homebrewSearchPaths: [String] = [
+        "/opt/homebrew/Caskroom",
+        "/usr/local/Caskroom",
+        "/opt/homebrew/Applications",
+        "/usr/local/bin",
     ]
 
     init() {
@@ -247,37 +258,51 @@ final class AppStore: ObservableObject {
             let group = DispatchGroup()
             let lock = NSLock()
             
-            // Scan all applications
+            // First, discover applications using LaunchServices (system registry)
+            group.enter()
+            scanQueue.async {
+                let launchServicesApps = self.discoverApplicationsUsingLaunchServices()
+                lock.lock()
+                for app in launchServicesApps {
+                    if !seenPaths.contains(app.url.path) {
+                        seenPaths.insert(app.url.path)
+                        found.append(app)
+                    }
+                }
+                lock.unlock()
+                group.leave()
+            }
+            
+            // Then scan filesystem paths for any missed applications
             for path in self.applicationSearchPaths {
                 group.enter()
                 scanQueue.async {
-                    let url = URL(fileURLWithPath: path)
-                    
-                    if let enumerator = FileManager.default.enumerator(
-                        at: url,
-                        includingPropertiesForKeys: [.isDirectoryKey],
-                        options: [.skipsHiddenFiles, .skipsPackageDescendants]
-                    ) {
-                        var localFound: [AppInfo] = []
-                        var localSeenPaths = Set<String>()
-                        
-                        for case let item as URL in enumerator {
-                            let resolved = item.resolvingSymlinksInPath()
-                            guard resolved.pathExtension == "app",
-                                  self.isValidApp(at: resolved),
-                                  !self.isInsideAnotherApp(resolved) else { continue }
-                            if !localSeenPaths.contains(resolved.path) {
-                                localSeenPaths.insert(resolved.path)
-                                localFound.append(self.appInfo(from: resolved))
-                            }
+                    let pathApps = self.scanApplicationsInPath(path)
+                    lock.lock()
+                    for app in pathApps {
+                        if !seenPaths.contains(app.url.path) {
+                            seenPaths.insert(app.url.path)
+                            found.append(app)
                         }
-                        
-                        // Thread-safely merge results
-                        lock.lock()
-                        found.append(contentsOf: localFound)
-                        seenPaths.formUnion(localSeenPaths)
-                        lock.unlock()
                     }
+                    lock.unlock()
+                    group.leave()
+                }
+            }
+            
+            // Scan Homebrew casks specifically
+            for homebrewPath in self.homebrewSearchPaths {
+                group.enter()
+                scanQueue.async {
+                    let homebrewApps = self.scanHomebrewApplications(in: homebrewPath)
+                    lock.lock()
+                    for app in homebrewApps {
+                        if !seenPaths.contains(app.url.path) {
+                            seenPaths.insert(app.url.path)
+                            found.append(app)
+                        }
+                    }
+                    lock.unlock()
                     group.leave()
                 }
             }
@@ -328,6 +353,277 @@ final class AppStore: ObservableObject {
         
         hasPerformedInitialScan = false
         scanApplicationsWithOrderPreservation()
+    }
+    
+    // MARK: - Enhanced Application Discovery
+    
+    /// Discover applications using LaunchServices (system registry)
+    private func discoverApplicationsUsingLaunchServices() -> [AppInfo] {
+        var applications: [AppInfo] = []
+        
+        // Use NSWorkspace to get all applications from LaunchServices database
+        let workspace = NSWorkspace.shared
+        
+        // Get all application URLs from the system
+        // This uses the private Launch Services database that Spotlight and Launchpad use
+        let allApplications = workspace.runningApplications
+        for app in allApplications {
+            if let bundleURL = app.bundleURL,
+               bundleURL.pathExtension == "app",
+               FileManager.default.fileExists(atPath: bundleURL.path),
+               isValidApp(at: bundleURL) && 
+               shouldShowInLaunchpad(at: bundleURL) {
+                let resolved = bundleURL.resolvingSymlinksInPath()
+                if !applications.contains(where: { $0.url.path == resolved.path }) {
+                    applications.append(appInfo(from: resolved))
+                }
+            }
+        }
+        
+        // Alternative method: use mdfind (Spotlight) to find all .app bundles
+        // This mimics what Launchpad actually does internally
+        let spotlightApps = findApplicationsUsingSpotlight()
+        for app in spotlightApps {
+            if !applications.contains(where: { $0.url.path == app.url.path }) {
+                applications.append(app)
+            }
+        }
+        
+        return applications
+    }
+    
+    /// Use Spotlight (mdfind) to discover applications like Launchpad does
+    private func findApplicationsUsingSpotlight() -> [AppInfo] {
+        var applications: [AppInfo] = []
+        
+        let task = Process()
+        task.launchPath = "/usr/bin/mdfind"
+        // Only look for actual application bundles, not all packages
+        task.arguments = [
+            "kMDItemContentType == 'com.apple.application-bundle'"
+        ]
+        
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = Pipe() // Suppress errors
+        
+        do {
+            try task.run()
+            task.waitUntilExit()
+            
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            if let output = String(data: data, encoding: .utf8) {
+                let paths = output.components(separatedBy: .newlines)
+                    .filter { !$0.isEmpty }
+                    .filter { $0.hasSuffix(".app") }
+                
+                for path in paths {
+                    let url = URL(fileURLWithPath: path)
+                    let resolved = url.resolvingSymlinksInPath()
+                    
+                    if isValidApp(at: resolved) && shouldShowInLaunchpad(at: resolved) {
+                        applications.append(appInfo(from: resolved))
+                    }
+                }
+            }
+        } catch {
+            // Fallback to regular filesystem scan if mdfind fails
+            print("Failed to use mdfind for application discovery: \(error)")
+        }
+        
+        return applications
+    }
+    
+    /// Scan applications in a specific path
+    private func scanApplicationsInPath(_ path: String) -> [AppInfo] {
+        var applications: [AppInfo] = []
+        let url = URL(fileURLWithPath: path)
+        
+        guard FileManager.default.fileExists(atPath: path) else { return applications }
+        
+        if let enumerator = FileManager.default.enumerator(
+            at: url,
+            includingPropertiesForKeys: [.isDirectoryKey, .typeIdentifierKey],
+            options: [.skipsHiddenFiles]
+        ) {
+            for case let item as URL in enumerator {
+                let resolved = item.resolvingSymlinksInPath()
+                
+                // Only look for .app bundles - don't scan for individual binaries
+                if resolved.pathExtension == "app" &&
+                   isValidApp(at: resolved) &&
+                   !isInsideAnotherApp(resolved) &&
+                   shouldShowInLaunchpad(at: resolved) {
+                    applications.append(appInfo(from: resolved))
+                }
+            }
+        }
+        
+        return applications
+    }
+    
+    /// Scan Homebrew cask applications
+    private func scanHomebrewApplications(in path: String) -> [AppInfo] {
+        var applications: [AppInfo] = []
+        let url = URL(fileURLWithPath: path)
+        
+        guard FileManager.default.fileExists(atPath: path) else { return applications }
+        
+        if let enumerator = FileManager.default.enumerator(
+            at: url,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) {
+            for case let item as URL in enumerator {
+                let resolved = item.resolvingSymlinksInPath()
+                
+                // Look for Applications folders within cask directories
+                if resolved.lastPathComponent == "Applications" || 
+                   resolved.pathExtension == "app" {
+                    
+                    if resolved.pathExtension == "app" &&
+                       isValidApp(at: resolved) &&
+                       shouldShowInLaunchpad(at: resolved) {
+                        applications.append(appInfo(from: resolved))
+                    } else if resolved.lastPathComponent == "Applications" {
+                        // Scan inside the Applications folder
+                        applications.append(contentsOf: scanApplicationsInPath(resolved.path))
+                    }
+                }
+            }
+        }
+        
+        return applications
+    }
+    
+    /// Determine if an application should appear in Launchpad
+    private func shouldShowInLaunchpad(at url: URL) -> Bool {
+        guard let bundle = Bundle(url: url) else { return false }
+        
+        // Check for LSUIElement (background-only apps)
+        if let isUIElement = bundle.object(forInfoDictionaryKey: "LSUIElement") as? Bool, isUIElement {
+            return false
+        }
+        
+        // Check for LSBackgroundOnly (background-only apps)
+        if let isBackgroundOnly = bundle.object(forInfoDictionaryKey: "LSBackgroundOnly") as? Bool, isBackgroundOnly {
+            return false
+        }
+        
+        // Check bundle type - only show actual applications
+        if let bundleType = bundle.object(forInfoDictionaryKey: "CFBundlePackageType") as? String {
+            if bundleType != "APPL" { // Only standard applications
+                return false
+            }
+        }
+        
+        // Check bundle identifier for system utilities
+        if let bundleId = bundle.bundleIdentifier {
+            let systemBundlePatterns = [
+                "com.apple.inputmethod",
+                "com.apple.CoreServices",
+                "com.apple.systempreferences",
+                "com.apple.scanner",
+                "com.apple.AirScan",
+                "com.apple.ScannerUtility",
+                "com.apple.private",
+                "com.apple.internal",
+                "org.python",
+                "com.python",
+                "org.pythonmac",
+                "container.",
+                "plugin."
+            ]
+            
+            for pattern in systemBundlePatterns {
+                if bundleId.lowercased().contains(pattern.lowercased()) {
+                    return false
+                }
+            }
+        }
+        
+        // Exclude system utilities and internal applications that shouldn't appear in Launchpad
+        let excludedPaths = [
+            "/System/Library/CoreServices/",
+            "/System/Library/PrivateFrameworks/",
+            "/usr/libexec/",
+            "/System/Library/Frameworks/",
+            "/System/Library/Extensions/",
+            "/Library/Application Support/",
+            "/System/Installation/",
+            "/System/Cryptexes/",
+            "/usr/bin/",
+            "/usr/sbin/",
+            "/bin/",
+            "/sbin/",
+            "/System/Library/Input Methods/",
+            "/Library/Input Methods/",
+            "/System/Library/Image Capture/",
+            "/Library/Image Capture/",
+            "/System/Library/Services/",
+            "/Library/Services/",
+            "/System/Library/PreferencePanes/",
+            "/Library/PreferencePanes/",
+            "/System/Library/Screen Savers/",
+            "/Library/Screen Savers/",
+            "/System/Library/Components/",
+            "/Library/Components/",
+            "/System/Library/Spotlight/",
+            "/Library/Spotlight/",
+            "/System/Library/Containers/",
+            "/Library/Containers/",
+            "/usr/local/bin/",
+            "/opt/homebrew/bin/"
+        ]
+        
+        for excludedPath in excludedPaths {
+            if url.path.hasPrefix(excludedPath) {
+                return false
+            }
+        }
+        
+        // Exclude specific system applications that shouldn't be in Launchpad
+        let excludedApps = [
+            "Wireless Diagnostics.app",
+            "Database Events.app",
+            "Directory Utility.app",
+            "Network Utility.app",
+            "System Information.app",
+            "Console.app",
+            "SCIM.app",
+            "AirScanScanner.app",
+            "AirScan Scanner.app",
+            "AirScanLegacyDiscovery.app",
+            "Python Launcher.app",
+            "Python.app"
+        ]
+        
+        let appName = url.lastPathComponent
+        if excludedApps.contains(appName) {
+            return false
+        }
+        
+        // Check if it's a developer/debug application or system utility
+        let appNameLower = appName.lowercased()
+        if appNameLower.contains("debug") || 
+           appNameLower.contains("test") ||
+           appNameLower.contains("diagnostic") ||
+           appNameLower.contains("scanner") ||
+           appNameLower.contains("scim") ||
+           appNameLower.contains("inputmethod") ||
+           appNameLower.contains("input method") ||
+           appNameLower.contains("utility") ||
+           appNameLower.contains("helper") ||
+           appNameLower.contains("daemon") ||
+           appNameLower.contains("service") ||
+           appNameLower.contains("python") ||
+           appNameLower.contains("plugin") ||
+           appNameLower.contains("container") {
+            return false
+        }
+        
+        // Include by default if it passes all filters
+        return true
     }
     
     /// Process scanned applications, intelligently match existing order
@@ -696,7 +992,9 @@ final class AppStore: ObservableObject {
     func startAutoRescan() {
         guard fsEventStream == nil else { return }
 
-        let pathsToWatch: [String] = applicationSearchPaths
+        let pathsToWatch: [String] = applicationSearchPaths + homebrewSearchPaths.filter { path in
+            FileManager.default.fileExists(atPath: path) && !applicationSearchPaths.contains(path)
+        }
         var context = FSEventStreamContext(
             version: 0,
             info: UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque()),
@@ -765,7 +1063,7 @@ final class AppStore: ObservableObject {
             let modified = (flags & FSEventStreamEventFlags(kFSEventStreamEventFlagItemModified)) != 0
             let isDir = (flags & FSEventStreamEventFlags(kFSEventStreamEventFlagItemIsDir)) != 0
 
-            if isDir && (created || removed || renamed), applicationSearchPaths.contains(where: { rawPath.hasPrefix($0) }) {
+            if isDir && (created || removed || renamed), (applicationSearchPaths + homebrewSearchPaths).contains(where: { rawPath.hasPrefix($0) }) {
                 localForceFull = true
                 break
             }
