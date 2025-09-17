@@ -10,7 +10,7 @@ extension LaunchpadItem {
     }
 }
 
-// MARK: - 简化的翻页管理器
+// MARK: - Simplified Page Flip Manager
 private class PageFlipManager: ObservableObject {
     @Published var isCooldown: Bool = false
     private var lastFlipTime: Date?
@@ -55,14 +55,14 @@ struct LaunchpadView: View {
     @State private var currentAppHeight: CGFloat = 0
     @State private var currentIconSize: CGFloat = 0
     
-    // 性能优化：使用静态缓存避免状态修改问题
+    // Performance optimization: use static cache to avoid state modification issues
     private static var geometryCache: [String: CGPoint] = [:]
     private static var lastGeometryUpdate: Date = Date.distantPast
-    private let geometryCacheTimeout: TimeInterval = 0.1 // 100ms缓存超时
+    private let geometryCacheTimeout: TimeInterval = 0.1 // 100ms cache timeout
     
-    // 性能监控
+    // Performance monitoring
     @State private var performanceMetrics: [String: TimeInterval] = [:]
-    private let enablePerformanceMonitoring = false // 设置为true启用性能监控
+    private let enablePerformanceMonitoring = false // Set to true to enable performance monitoring
     @State private var isHandoffDragging: Bool = false
     @State private var isUserSwiping: Bool = false
     @State private var accumulatedScrollX: CGFloat = 0
@@ -81,9 +81,9 @@ struct LaunchpadView: View {
         guard !appStore.searchText.isEmpty else { return appStore.items }
         
         var result: [LaunchpadItem] = []
-        var searchedApps = Set<String>() // 用于去重，避免重复显示同一个应用
+        var searchedApps = Set<String>() // Used for deduplication, avoid displaying the same app multiple times
         
-        // 首先搜索主界面上的项目
+        // First search items on the main interface
         for item in appStore.items {
             switch item {
             case .app(let app):
@@ -365,7 +365,7 @@ struct LaunchpadView: View {
                     .allowsHitTesting(!isFolderOpen)
                 }
                 
-                // 在页面指示圆点下方添加动态padding
+                // Add dynamic padding below the page indicator dots
                 if config.isFullscreen {
                     Spacer()
                         .frame(height: actualBottomPadding)
@@ -379,7 +379,7 @@ struct LaunchpadView: View {
         .ignoresSafeArea()
         .overlay(
             ZStack {
-                // 全窗口滚动捕获层（不拦截点击，仅监听滚动）
+                // Full-window scroll capture layer (does not intercept clicks, only listens for scrolls)
                 ScrollEventCatcher { deltaX, deltaY, phase, isMomentum, isPrecise in
                     let pageWidth = currentContainerSize.width + config.pageSpacing
                     handleScroll(deltaX: deltaX,
@@ -392,19 +392,19 @@ struct LaunchpadView: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
 
-                // 半透明背景：常驻，基于状态控制可点击性，避免动画退场期间拦截点击
+                // Semi-transparent background: persistent, clickability controlled by state, avoids intercepting clicks during animation exit
                 Color.black
                     .opacity(isFolderOpen ? 0.1 : 0)
                     .ignoresSafeArea()
                     .allowsHitTesting(isFolderOpen)
                     .onTapGesture {
-                        // 如果正在编辑文件夹名称，不关闭文件夹
+                        // If editing folder name, do not close folder
                         if !appStore.isFolderNameEditing {
                             let closingFolder = appStore.openFolder
                             withAnimation(LNAnimations.springFast) {
                                 appStore.openFolder = nil
                             }
-                            // 关闭后将键盘导航选中项切换到该文件夹
+                            // After closing, switch the keyboard navigation selection to the folder
                             if let folder = closingFolder,
                                let idx = filteredItems.firstIndex(of: .folder(folder)) {
                                 isKeyboardNavigationActive = true
@@ -414,7 +414,7 @@ struct LaunchpadView: View {
                                     appStore.currentPage = targetPage
                                 }
                             }
-                            // 关闭文件夹后恢复搜索框焦点
+                            // After closing, restore focus to the search field
                             isSearchFieldFocused = true
                         }
                     }
@@ -424,11 +424,11 @@ struct LaunchpadView: View {
                         let targetWidth = proxy.size.width * 0.7
                         let targetHeight = proxy.size.height * 0.7
                         let folderId = openFolder.id
-                        
-                        // 使用计算属性来确保绑定能够正确响应folderUpdateTrigger的变化
+
+                        // Use computed properties to ensure binding responds correctly to folderUpdateTrigger changes
                         let folderBinding = Binding<FolderInfo>(
                             get: {
-                                // 每次访问都重新查找文件夹，确保获取最新状态
+                                // Re-find the folder each time to ensure the latest state is retrieved
                                 if let idx = appStore.folders.firstIndex(where: { $0.id == folderId }) {
                                     return appStore.folders[idx]
                                 }
@@ -450,7 +450,7 @@ struct LaunchpadView: View {
                                 withAnimation(LNAnimations.springFast) {
                                     appStore.openFolder = nil
                                 }
-                                // 关闭后将键盘导航选中项切换到该文件夹
+                                // After closing, switch the keyboard navigation selection to the folder
                                 if let folder = closingFolder,
                                    let idx = filteredItems.firstIndex(of: .folder(folder)) {
                                     isKeyboardNavigationActive = true
@@ -460,7 +460,7 @@ struct LaunchpadView: View {
                                         appStore.currentPage = targetPage
                                     }
                                 }
-                                // 关闭文件夹后恢复搜索框焦点
+                                // After closing, restore focus to the search field
                                 isSearchFieldFocused = true
                             },
                             onLaunchApp: { app in
@@ -469,7 +469,7 @@ struct LaunchpadView: View {
                         )
                         .frame(width: targetWidth, height: targetHeight)
                         .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
-                        .id("folder_\(folderId)") // 使用稳定ID，避免每次更新导致视图重建
+                        .id("folder_\(folderId)") // Use stable ID to avoid view reconstruction on updates
                         
                     }
                 }
@@ -493,7 +493,7 @@ struct LaunchpadView: View {
                setupInitialSelection()
                setupWindowShownObserver()
                setupWindowHiddenObserver()
-               // 监听全局鼠标抬起，确保拖拽状态被正确清理（窗口外释放时）
+               // Listen for global mouse up events to ensure drag state is properly cleared (when released outside the window)
                if let existing = globalMouseUpMonitor { NSEvent.removeMonitor(existing) }
                globalMouseUpMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseUp]) { _ in
                    if handoffEventMonitor != nil || draggingItem != nil {
@@ -514,7 +514,7 @@ struct LaunchpadView: View {
                isKeyboardNavigationActive = false
                clampSelection()
                
-               // 检查缓存状态
+               // Initial cache status check
                checkCacheStatus()
            }
          .onDisappear {
@@ -559,10 +559,10 @@ struct LaunchpadView: View {
     // MARK: - Handoff drag from folder
     private func startHandoffDragIfNeeded(geo: GeometryProxy, columnWidth: CGFloat, appHeight: CGFloat, iconSize: CGFloat) {
         guard draggingItem == nil, let app = appStore.handoffDraggingApp else { return }
-        // 更新几何上下文
+        // Update geometry context
         captureGridGeometry(geo, columnWidth: columnWidth, appHeight: appHeight, iconSize: iconSize)
 
-        // 初始位置：屏幕 -> 网格局部
+        // Initial position: screen -> grid local
         let screenPoint = appStore.handoffDragScreenLocation ?? NSEvent.mouseLocation
         let localPoint = convertScreenToGrid(screenPoint)
 
@@ -573,10 +573,10 @@ struct LaunchpadView: View {
         appStore.folderCreationTarget = nil
         dragPreviewScale = 1.2
         dragPreviewPosition = localPoint
-        // 使接力拖拽与普通拖拽一致：预创建新页面以支持边缘翻页
+        // Make handoff drag consistent with normal drag: pre-create new page to support edge flipping
         isHandoffDragging = true
 
-        // 智能跳页：根据拖拽位置决定是否跳转到合适的页面
+        // Intelligent page flipping: determine whether to jump to the appropriate page based on drag position
         if let targetIndex = indexAt(point: localPoint,
                                      in: currentContainerSize,
                                      pageIndex: appStore.currentPage,
@@ -594,7 +594,7 @@ struct LaunchpadView: View {
             switch event.type {
             case .leftMouseDragged:
                 let lp = convertScreenToGrid(NSEvent.mouseLocation)
-                // 复用与普通拖拽相同的核心更新逻辑
+                // Reuse the same core update logic as normal drag
                 applyDragUpdate(at: lp,
                                 containerSize: currentContainerSize,
                                 columnWidth: currentColumnWidth,
@@ -616,7 +616,8 @@ struct LaunchpadView: View {
     private func convertScreenToGrid(_ screenPoint: CGPoint) -> CGPoint {
         guard let window = NSApp.keyWindow else { return screenPoint }
         let windowPoint = window.convertPoint(fromScreen: screenPoint)
-        // SwiftUI 的 .global 顶部为原点，AppKit 窗口坐标底部为原点，需要翻转 y
+        // The top of SwiftUI's .global coordinate space is the origin, while in AppKit
+        // The bottom of the window is the origin, so the y-coordinate needs to be flipped.
         let windowHeight = window.contentView?.bounds.height ?? window.frame.size.height
         let x = windowPoint.x - gridOriginInWindow.x
         let yFromTop = windowHeight - windowPoint.y
@@ -625,7 +626,7 @@ struct LaunchpadView: View {
     }
 
     private func handleHandoffDragMove(to localPoint: CGPoint) {
-        // 复用与普通拖拽完全一致的更新逻辑
+        // Reuse the same core update logic as normal drag
         applyDragUpdate(at: localPoint,
                         containerSize: currentContainerSize,
                         columnWidth: currentColumnWidth,
@@ -641,21 +642,21 @@ struct LaunchpadView: View {
                 draggingItem = nil
                 pendingDropIndex = nil
                 clampSelection()
-                // 重置翻页状态
+                // Reset page flipping state
                 pageFlipManager.isCooldown = false
                 isHandoffDragging = false
-                // 重置拖拽创建文件夹相关状态，确保后续拖拽功能正常
+                // Reset drag folder creation state to ensure normal drag functionality
                 appStore.isDragCreatingFolder = false
                 appStore.folderCreationTarget = nil
-                // 与普通拖拽结束保持一致的清理
+                // Reset handoff drag state
                 appStore.cleanupUnusedNewPage()
                 appStore.removeEmptyPages()
                 appStore.saveAllOrder()
-                // 触发网格刷新，确保拖拽手势被正确重新添加
+                // Trigger grid refresh to ensure drag gesture is correctly re-added
                 appStore.triggerGridRefresh()
             }
         }
-        // 在接力拖拽模式下，落点时再计算目标索引，过程中不展示吸附
+        // Final update to ensure the last position is captured
         if isHandoffDragging && pendingDropIndex == nil {
             if let idx = indexAt(point: dragPreviewPosition,
                                   in: currentContainerSize,
@@ -671,10 +672,10 @@ struct LaunchpadView: View {
             }
         }
 
-        // 使用统一的拖拽结束处理逻辑
+        // Reuse the same drag end handling logic
         finalizeDragOperation(containerSize: currentContainerSize, columnWidth: currentColumnWidth, appHeight: currentAppHeight, iconSize: currentIconSize)
-        
-        // 立即触发网格刷新，确保拖拽手势被正确重新添加
+
+        // Immediately trigger grid refresh to ensure drag gesture is correctly re-added
         appStore.triggerGridRefresh()
     }
 
@@ -760,7 +761,7 @@ extension LaunchpadView {
                         appStore.currentPage = targetPage
                     }
                 }
-                // 关闭文件夹后恢复搜索框焦点
+                // Close folder and restore focus to search field
                 isSearchFieldFocused = true
                 return nil
             }
@@ -809,7 +810,7 @@ extension LaunchpadView {
                 clampSelection()
                 return nil
             }
-            // 已激活时保留原有翻页行为（Shift 反向）
+            // When activated, retain the original paging behavior (Shift for reverse)
             let backward = event.modifierFlags.contains(.shift)
             if backward {
                 navigateToPreviousPage()
@@ -820,7 +821,10 @@ extension LaunchpadView {
             return nil
         }
 
-        // Shift + 方向键翻页 - 改为用户配置的导航键
+        // Shift + Arrow for page navigation
+        // If the modifier is not held, let the arrow key handle normal selection movement
+        // If the modifier is held, handle page navigation here
+
         let hasRequiredModifier = appStore.useShiftModifier ? event.modifierFlags.contains(.shift) : !event.modifierFlags.contains(.shift)
         
         if hasRequiredModifier {
@@ -865,17 +869,17 @@ extension LaunchpadView {
             return nil
         }
 
-        // 普通方向键导航（在没有页面导航修饰符的情况下）
+        // Normal arrow key navigation (when no page navigation modifier is held)
         if let (dx, dy) = arrowDelta(for: code) {
             let hasPageNavModifier = appStore.useShiftModifier ? event.modifierFlags.contains(.shift) : !event.modifierFlags.contains(.shift)
             let isPageNavKey = (code == appStore.previousPageKey || code == appStore.nextPageKey)
-            
-            // 如果这是页面导航键且有正确的修饰符，让它在上面的页面导航逻辑中处理
+
+            // If this is a page navigation key and has the correct modifier, let it be handled in the above page navigation logic
             if isPageNavKey && hasPageNavModifier {
                 return event
             }
             
-            // 否则进行普通的选择导航
+            // If not activated, activate keyboard navigation and select the first item of the current page
             guard isKeyboardNavigationActive else { return event }
             moveSelection(dx: dx, dy: dy)
             return nil
@@ -980,7 +984,7 @@ extension LaunchpadView {
             )
             .frame(height: appHeight)
             .matchedGeometryEffect(id: item.id, in: reorderNamespace)
-            // 保持稳定的视图身份，避免在文件夹更新后中断拖拽手势
+            // Ensure each item has a stable identity for drag operations
             .id(item.id)
 
 
@@ -998,7 +1002,7 @@ extension LaunchpadView {
                             .onEnded { _ in
                                 guard draggingItem != nil else { return }
                                 
-                                // 使用统一的拖拽结束处理逻辑
+                                // Final update to ensure the last position is captured
                                 finalizeDragOperation(containerSize: containerSize, columnWidth: columnWidth, appHeight: appHeight, iconSize: iconSize)
 
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
@@ -1007,8 +1011,8 @@ extension LaunchpadView {
                                     clampSelection()
                                     appStore.cleanupUnusedNewPage()
                                     appStore.removeEmptyPages()
-                                    
-                                    // 确保拖拽操作完成后立即保存
+
+                                    // Ensure drag operation is completed before saving
                                     appStore.saveAllOrder()
                                 }
                             }
@@ -1056,10 +1060,10 @@ extension LaunchpadView {
                             pageIndex: Int,
                             columnWidth: CGFloat,
                             appHeight: CGFloat) -> CGPoint {
-        // 性能优化：使用缓存避免重复计算
+        // Performance optimization: use cache to avoid repeated calculations
         let cacheKey = "center_\(globalIndex)_\(pageIndex)_\(containerSize.width)_\(containerSize.height)_\(columnWidth)_\(appHeight)"
         
-        // 检查缓存是否有效
+        // Check cache validity
         let now = Date()
         if now.timeIntervalSince(Self.lastGeometryUpdate) < geometryCacheTimeout,
            let cached = Self.geometryCache[cacheKey] {
@@ -1069,7 +1073,7 @@ extension LaunchpadView {
         let origin = cellOrigin(for: globalIndex, in: containerSize, pageIndex: pageIndex, columnWidth: columnWidth, appHeight: appHeight)
         let center = CGPoint(x: origin.x + columnWidth / 2, y: origin.y + appHeight / 2)
         
-        // 异步更新缓存，避免在视图更新期间修改状态
+        // Asynchronously update the cache to avoid modifying the state during view updates
         DispatchQueue.main.async {
             Self.geometryCache[cacheKey] = center
             Self.lastGeometryUpdate = now
@@ -1111,7 +1115,7 @@ extension LaunchpadView {
                                       columnWidth: CGFloat,
                                       appHeight: CGFloat,
                                       iconSize: CGFloat) -> Bool {
-        // 性能优化：使用缓存避免重复计算
+        // Performance optimization: use cache to avoid repeated calculations
         let cacheKey = "centerArea_\(targetIndex)_\(pageIndex)_\(containerSize.width)_\(containerSize.height)_\(columnWidth)_\(appHeight)_\(iconSize)"
         
         let now = Date()
@@ -1137,7 +1141,7 @@ extension LaunchpadView {
             height: centerAreaSize
         )
         
-        // 异步更新缓存，避免在视图更新期间修改状态
+        // Asynchronously update the cache to avoid modifying the state during view updates
         DispatchQueue.main.async {
             Self.geometryCache[cacheKey] = targetCenter
             Self.lastGeometryUpdate = now
@@ -1189,9 +1193,9 @@ extension LaunchpadView {
             isUserSwiping = true
             accumulatedScrollX += delta
         case .ended, .cancelled:
-            // 使灵敏度越大阈值越小，以符合直觉（与鼠标滚轮一致）
-            // 归一到默认值 0.15：threshold = pageWidth * (0.0225 / sensitivity)
-            // 当 sensitivity=0.15 时，阈值为 0.15*pageWidth；越大则更灵敏（阈值更小）
+            // Make the threshold smaller with higher sensitivity for intuitive feel (consistent with mouse wheel)
+            // Normalize to default value 0.15: threshold = pageWidth * (0.0225 / sensitivity)
+            // When sensitivity=0.15, threshold is 0.15*pageWidth; larger sensitivity means more responsive (smaller threshold)
             let threshold = pageWidth * (0.0225 / max(appStore.scrollSensitivity, 0.001))
             if accumulatedScrollX <= -threshold {
                 navigateToNextPage()
@@ -1242,7 +1246,7 @@ struct ScrollEventCatcher: NSViewRepresentable {
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             if let monitor = eventMonitor { NSEvent.removeMonitor(monitor); eventMonitor = nil }
-            // 全局监听当前窗口的滚动事件，不消费事件
+            // Global listener for scroll events in the current window, without consuming events
             eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel]) { [weak self] event in
                 let phase = event.phase != [] ? event.phase : event.momentumPhase
                 let isMomentum = event.momentumPhase != []
@@ -1257,7 +1261,7 @@ struct ScrollEventCatcher: NSViewRepresentable {
         }
 
         override func hitTest(_ point: NSPoint) -> NSView? {
-            // 不拦截命中测试，让下层视图处理点击/拖拽等
+            // Make this view transparent to mouse events
             return nil
         }
 
@@ -1306,10 +1310,10 @@ extension LaunchpadView {
         currentAppHeight = appHeight
         currentIconSize = iconSize
         
-        // 性能优化：清理过期的几何缓存
+        // Clear old cache entries periodically to prevent unbounded growth
         let now = Date()
         if now.timeIntervalSince(Self.lastGeometryUpdate) > geometryCacheTimeout * 2 {
-            // 异步清理缓存，避免在视图更新期间修改状态
+            // Asynchronously clear the cache to avoid modifying the state during view updates
             DispatchQueue.main.async {
                 Self.geometryCache.removeAll()
                 Self.lastGeometryUpdate = now
@@ -1320,7 +1324,7 @@ extension LaunchpadView {
     fileprivate func flipPageIfNeeded(at point: CGPoint, in containerSize: CGSize) -> Bool {
         let edgeMargin: CGFloat = config.pageNavigation.edgeFlipMargin
         
-        // 检查翻页冷却状态
+        // Update page flip manager state
         pageFlipManager.autoFlipInterval = config.pageNavigation.autoFlipInterval
         guard pageFlipManager.canFlip() else { return false }
                 
@@ -1329,12 +1333,12 @@ extension LaunchpadView {
             pageFlipManager.recordFlip()
             return true
         } else if point.x >= containerSize.width - edgeMargin {
-            // 检查是否需要创建新页面
+            // Check if a new page needs to be created
             let nextPage = appStore.currentPage + 1
             let itemsPerPage = config.itemsPerPage
             let nextPageStart = nextPage * itemsPerPage
             
-            // 如果拖拽到新页面，确保有足够的空间
+            // If dragging to a new page, ensure the new page has enough items
             if nextPageStart >= currentItems.count {
                 let neededItems = nextPageStart + itemsPerPage - currentItems.count
                 for _ in 0..<neededItems {
@@ -1370,10 +1374,10 @@ extension LaunchpadView {
         } else if point.x >= containerSize.width - edgeMargin {
             let nextPage = appStore.currentPage + 1
             let nextPageStart = nextPage * itemsPerPage
-            
-            // 如果拖拽到新页面，确保能够正确预测到新页面的第一个位置
+
+            // If dragging to a new page, ensure the new page has enough items
             if nextPageStart >= currentItems.count {
-                // 拖拽到全新页面，返回新页面的第一个位置
+                // Dragging to a completely new page, return the first position of the new page
                 return nextPageStart
             } else {
                 return min(nextPageStart, currentItems.count - 1)
@@ -1407,7 +1411,7 @@ struct GridConfig {
     
     struct PageNavigation {
         let edgeFlipMargin: CGFloat = 15
-        let autoFlipInterval: TimeInterval = 0.8 // 拖拽贴边翻页两次之间间隔0.8秒
+        let autoFlipInterval: TimeInterval = 0.8 // Dragging to the edge flip page interval is 0.8 seconds
         let scrollPageThreshold: CGFloat = 0.75
         let scrollFinishThreshold: CGFloat = 0.5
     }
@@ -1433,7 +1437,7 @@ struct DragPreviewItem: View {
     let labelWidth: CGFloat
     var scale: CGFloat = 1.2
     
-    // 性能优化：使用计算属性避免状态修改
+    // Computed property to get the appropriate icon
     private var displayIcon: NSImage {
         switch item {
         case .app(let app):
@@ -1513,12 +1517,12 @@ func arrowDelta(for keyCode: UInt16) -> (dx: Int, dy: Int)? {
     }
 }
 
-// MARK: - 缓存管理扩展
+// MARK: - Cache checking
 
 extension LaunchpadView {
-    /// 检查缓存状态
+    /// Check cache status
     private func checkCacheStatus() {
-        // 如果缓存无效，触发重新扫描
+        // If the cache is invalid, trigger a re-scan
         if !AppCacheManager.shared.isCacheValid {
     
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
@@ -1527,9 +1531,9 @@ extension LaunchpadView {
         }
     }
     
-    // MARK: - 简化的拖拽处理函数
+    // MARK: - Drag handling helpers
     private func handleDragChange(_ value: DragGesture.Value, item: LaunchpadItem, in containerSize: CGSize, columnWidth: CGFloat, appHeight: CGFloat, iconSize: CGFloat) {
-        // 初始化拖拽
+        // Initialize drag
         if draggingItem == nil {
             var tx = Transaction(); tx.disablesAnimations = true
             withTransaction(tx) { draggingItem = item }
@@ -1545,11 +1549,11 @@ extension LaunchpadView {
                         iconSize: iconSize)
     }
 
-    // 统一的拖拽结束处理逻辑（普通拖拽与接力拖拽共用）
+    // Unified drag end handling logic (common for normal drag and relay drag)
     private func finalizeDragOperation(containerSize: CGSize, columnWidth: CGFloat, appHeight: CGFloat, iconSize: CGFloat) {
         guard let dragging = draggingItem else { return }
         
-        // 处理文件夹创建逻辑
+        // Handle special case: drag to create folder
         if appStore.isDragCreatingFolder, case .app(let app) = dragging {
             if let targetApp = appStore.folderCreationTarget {
                 if let insertAt = filteredItems.firstIndex(of: .app(targetApp)) {
@@ -1604,15 +1608,15 @@ extension LaunchpadView {
             return
         }
         
-        // 处理普通拖拽逻辑
+        // Normal drag end handling
         if let finalIndex = pendingDropIndex,
            let _ = filteredItems.firstIndex(of: dragging) {
-            // 检查是否为跨页拖拽
+            // Check if it's a cross-page drag
             let sourceIndexInItems = appStore.items.firstIndex(of: dragging) ?? 0
             let targetPage = finalIndex / config.itemsPerPage
             let sourcePage = sourceIndexInItems / config.itemsPerPage
             
-            // 视觉吸附到目标格中心
+            // Animate drag preview to the target cell
             let dropDisplayIndex = finalIndex
             let finalPage = pageOf(index: dropDisplayIndex)
             let targetCenter = cellCenter(for: dropDisplayIndex,
@@ -1626,7 +1630,7 @@ extension LaunchpadView {
             }
             
             if targetPage == sourcePage {
-                // 同页内移动：使用原有的页内排序逻辑
+                // Same-page move: use the original in-page sorting logic
                 let pageStart = (finalIndex / config.itemsPerPage) * config.itemsPerPage
                 let pageEnd = min(pageStart + config.itemsPerPage, appStore.items.count)
                 var newItems = appStore.items
@@ -1640,47 +1644,47 @@ extension LaunchpadView {
                     appStore.items = newItems
                 }
                 appStore.saveAllOrder()
-                
-                // 同页内拖拽结束后也进行压缩，确保empty项目移动到页面末尾
+
+                // Same-page drag end also compacts to ensure empty items move to the end of the page
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     appStore.compactItemsWithinPages()
                 }
             } else {
-                // 跨页拖拽：使用级联插入逻辑
+                // Cross-page drag: use cascading insert logic
                 appStore.moveItemAcrossPagesWithCascade(item: dragging, to: finalIndex)
             }
         } else {
-            // 兜底逻辑：如果没有有效的目标索引，将应用放置到当前页的末尾
+            // Fallback logic: if no valid target index, place the app at the end of the current page
             if filteredItems.firstIndex(of: dragging) != nil {
                 let currentPageStart = appStore.currentPage * config.itemsPerPage
                 let currentPageEnd = min(currentPageStart + config.itemsPerPage, appStore.items.count)
                 let targetIndex = currentPageEnd
                 
-                // 使用级联插入确保应用能正确放置
+                // Animate drag preview to the target cell
                 appStore.moveItemAcrossPagesWithCascade(item: dragging, to: targetIndex)
             }
         }
     }
 
-    // 统一的拖拽更新逻辑（普通拖拽与接力拖拽共用）
+    // Unified drag update logic (common for normal drag and relay drag)
     private func applyDragUpdate(at point: CGPoint,
                                  containerSize: CGSize,
                                  columnWidth: CGFloat,
                                  appHeight: CGFloat,
                                  iconSize: CGFloat) {
-        // 性能优化：减少频繁的位置更新
+        // Performance optimization: reduce frequent position updates
         let distance = sqrt(pow(dragPreviewPosition.x - point.x, 2) + pow(dragPreviewPosition.y - point.y, 2))
-        if distance < 2.0 { return } // 如果移动距离小于2像素，跳过更新
+        if distance < 2.0 { return } // If the movement distance is less than 2 pixels, skip the update
         
         dragPreviewPosition = point
         
-        // 性能优化：使用节流机制减少计算频率
+        // Performance optimization: Use throttling to reduce calculation frequency
         let now = Date()
         if now.timeIntervalSince(Self.lastGeometryUpdate) < 0.016 { // 约60fps
             return
         }
         
-        // 异步更新几何缓存时间戳，避免在视图更新期间修改状态
+        // Asynchronously update the last geometry update time to avoid modifying state during view updates
         DispatchQueue.main.async {
             Self.lastGeometryUpdate = now
         }
@@ -1809,7 +1813,7 @@ extension LaunchpadView {
         folderHoverBeganAt = nil
     }
     
-    // 性能监控辅助函数
+    // Performance monitoring helper function
     private func measurePerformance<T>(_ operation: String, _ block: () -> T) -> T {
         guard enablePerformanceMonitoring else { return block() }
         
@@ -1818,8 +1822,8 @@ extension LaunchpadView {
         let timeElapsed = CFAbsoluteTimeGetCurrent() - startTime
         
         performanceMetrics[operation] = timeElapsed
-        if timeElapsed > 0.016 { // 超过16ms（60fps阈值）
-            print("⚠️ 性能警告: \(operation) 耗时 \(String(format: "%.3f", timeElapsed * 1000))ms")
+        if timeElapsed > 0.016 { // Exceeds 16ms (60fps threshold)
+            print("⚠️ Performance Warning: \(operation) took \(String(format: "%.3f", timeElapsed * 1000))ms")
         }
         
         return result

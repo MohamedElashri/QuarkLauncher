@@ -2,51 +2,51 @@ import Foundation
 import AppKit
 import Combine
 
-/// 应用缓存管理器 - 负责缓存应用图标、应用信息和网格布局数据以提高性能
+/// Application cache manager - responsible for caching app icons, app info, and grid layout data to improve performance
 final class AppCacheManager: ObservableObject {
     static let shared = AppCacheManager()
     
-    // MARK: - 缓存存储
+    // MARK: - Cache Storage
     private var iconCache: [String: NSImage] = [:]
     private var appInfoCache: [String: AppInfo] = [:]
     private var gridLayoutCache: [String: Any] = [:]
     private let cacheLock = NSLock()
     
-    // MARK: - 缓存配置
+    // MARK: - Cache Configuration
     private let maxIconCacheSize = 200
     private let maxAppInfoCacheSize = 300
-    private var iconCacheOrder: [String] = [] // 改为可变数组，实现真正的LRU
+    private var iconCacheOrder: [String] = [] // Changed to mutable array for proper LRU implementation
     
-    // MARK: - 缓存状态
+    // MARK: - Cache State
     @Published var isCacheValid = false
     @Published var lastCacheUpdate = Date.distantPast
     @Published var cacheSize: Int = 0
-    // MARK: - 缓存键生成
+    // MARK: - Cache Key Generation
     private let cacheKeyGenerator = CacheKeyGenerator()
     
     private init() {}
-    // MARK: - 公共接口
+    // MARK: - Public Interface
     
-    /// 生成应用缓存 - 在应用启动或扫描后调用
+    /// Generate application cache - called after app startup or scanning
     func generateCache(from apps: [AppInfo], items: [LaunchpadItem]) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             
-            // 清空旧缓存
+            // Clear old cache
             self.clearAllCaches()
             
-            // 收集所有需要缓存的应用，包括文件夹内的应用
+            // Collect all applications that need to be cached, including apps in folders
             var allApps: [AppInfo] = []
             allApps.append(contentsOf: apps)
             
-            // 从items中提取文件夹内的应用
+            // Extract apps from folders in items
             for item in items {
                 if case let .folder(folder) = item {
                     allApps.append(contentsOf: folder.apps)
                 }
             }
             
-            // 去重，避免重复缓存同一个应用
+            // Deduplicate to avoid caching the same app multiple times
             var uniqueApps: [AppInfo] = []
             var seenPaths = Set<String>()
             for app in allApps {
@@ -56,13 +56,13 @@ final class AppCacheManager: ObservableObject {
                 }
             }
             
-            // 缓存应用信息
+            // Cache app information
             self.cacheAppInfos(uniqueApps)
             
-            // 缓存应用图标
+            // Cache app icons
             self.cacheAppIcons(uniqueApps)
             
-            // 缓存网格布局数据
+            // Cache grid layout data
             self.cacheGridLayout(items)
             
             DispatchQueue.main.async {
@@ -74,7 +74,7 @@ final class AppCacheManager: ObservableObject {
         }
     }
     
-    /// 获取缓存的应用图标
+    /// Get cached app icon
     func getCachedIcon(for appPath: String) -> NSImage? {
         let key = cacheKeyGenerator.generateIconKey(for: appPath)
         
@@ -91,19 +91,19 @@ final class AppCacheManager: ObservableObject {
         }
     }
     
-    /// 获取缓存的应用信息
+    /// Get cached app information
     func getCachedAppInfo(for appPath: String) -> AppInfo? {
         let key = cacheKeyGenerator.generateAppInfoKey(for: appPath)
         return appInfoCache[key]
     }
     
-    /// 获取缓存的网格布局数据
+    /// Get cached grid layout data
     func getCachedGridLayout(for layoutKey: String) -> Any? {
         let key = cacheKeyGenerator.generateGridLayoutKey(for: layoutKey)
         return gridLayoutCache[key]
     }
     
-    /// 预加载应用图标到缓存
+    /// Preload app icons to cache
     func preloadIcons(for appPaths: [String]) {
         DispatchQueue.global(qos: .utility).async { [weak self] in
             guard let self = self else { return }
@@ -131,7 +131,7 @@ final class AppCacheManager: ObservableObject {
         }
     }
     
-    /// 智能预加载：预加载当前页面和相邻页面的图标
+    /// Smart preloading: preload icons for current page and adjacent pages
     func smartPreloadIcons(for items: [LaunchpadItem], currentPage: Int, itemsPerPage: Int) {
         let startIndex = max(0, (currentPage - 1) * itemsPerPage)
         let endIndex = min(items.count, (currentPage + 2) * itemsPerPage)
@@ -147,7 +147,7 @@ final class AppCacheManager: ObservableObject {
         preloadIcons(for: appPaths)
     }
     
-    /// 清除所有缓存
+    /// Clear all caches
     func clearAllCaches() {
         cacheLock.lock()
         iconCache.removeAll()
@@ -162,30 +162,30 @@ final class AppCacheManager: ObservableObject {
         }
     }
     
-    /// 清除过期缓存
+    /// Clear expired cache
     func clearExpiredCache() {
         let now = Date()
-        let cacheAgeThreshold: TimeInterval = 24 * 60 * 60 // 24小时
+        let cacheAgeThreshold: TimeInterval = 24 * 60 * 60 // 24 hours
         
         if now.timeIntervalSince(lastCacheUpdate) > cacheAgeThreshold {
             clearAllCaches()
         }
     }
     
-    /// 手动刷新缓存
+    /// Manually refresh cache
     func refreshCache(from apps: [AppInfo], items: [LaunchpadItem]) {
-        // 收集所有需要缓存的应用，包括文件夹内的应用
+        // Collect all applications that need to be cached, including apps in folders
         var allApps: [AppInfo] = []
         allApps.append(contentsOf: apps)
         
-        // 从items中提取文件夹内的应用
+        // Extract apps from folders in items
         for item in items {
             if case let .folder(folder) = item {
                 allApps.append(contentsOf: folder.apps)
             }
         }
         
-        // 去重，避免重复缓存同一个应用
+        // Deduplicate to avoid caching the same app multiple times
         var uniqueApps: [AppInfo] = []
         var seenPaths = Set<String>()
         for app in allApps {
@@ -198,7 +198,7 @@ final class AppCacheManager: ObservableObject {
         generateCache(from: uniqueApps, items: items)
     }
     
-    // MARK: - 私有方法
+    // MARK: - Private Methods
     
     private func cacheAppInfos(_ apps: [AppInfo]) {
         cacheLock.lock()
@@ -229,7 +229,7 @@ final class AppCacheManager: ObservableObject {
     }
     
     private func cacheGridLayout(_ items: [LaunchpadItem]) {
-        // 缓存网格布局相关的计算数据
+        // Cache grid layout related calculation data
         let layoutData = GridLayoutCacheData(
             totalItems: items.count,
             itemsPerPage: 35,
@@ -247,7 +247,7 @@ final class AppCacheManager: ObservableObject {
         
     }
     
-    /// 计算页面信息
+    /// Calculate page information
     private func calculatePageInfo(for items: [LaunchpadItem]) -> [PageInfo] {
         let itemsPerPage = 35
         let pageCount = (items.count + itemsPerPage - 1) / itemsPerPage
@@ -288,13 +288,13 @@ final class AppCacheManager: ObservableObject {
     }
 
     
-    /// 获取性能统计
+    /// Get performance statistics
     var performanceStats: PerformanceStats {
         return PerformanceStats(cacheSize: cacheSize)
     }
 }
 
-// MARK: - 缓存键生成器
+// MARK: - Cache Key Generator
 
 private struct CacheKeyGenerator {
     func generateIconKey(for appPath: String) -> String {
@@ -310,7 +310,7 @@ private struct CacheKeyGenerator {
     }
 }
 
-// MARK: - 网格布局缓存数据结构
+// MARK: - Grid Layout Cache Data Structures
 
 private struct GridLayoutCacheData {
     let totalItems: Int
@@ -329,7 +329,7 @@ private struct PageInfo {
     let emptyCount: Int
 }
 
-// MARK: - 缓存统计信息
+// MARK: - Cache Statistics
 
 extension AppCacheManager {
     var cacheStatistics: CacheStatistics {
