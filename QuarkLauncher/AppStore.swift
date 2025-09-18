@@ -52,6 +52,13 @@ final class AppStore: ObservableObject {
         }
     }
     
+    // Theme preference
+    @Published var themePreference: String = "system" { // "system", "light", "dark"
+        didSet {
+            UserDefaults.standard.set(themePreference, forKey: "themePreference")
+        }
+    }
+    
     // Cache manager
     private let cacheManager = AppCacheManager.shared
     
@@ -125,6 +132,18 @@ final class AppStore: ObservableObject {
         self.nextPageKey = UInt16(savedNextKey ?? 124) // Default: Right Arrow
         
         self.useShiftModifier = UserDefaults.standard.bool(forKey: "useShiftModifier")
+        
+        // Load theme preference
+        self.themePreference = UserDefaults.standard.string(forKey: "themePreference") ?? "system"
+        
+        // Observe theme preference changes
+        $themePreference
+            .sink { [weak self] _ in
+                DispatchQueue.main.async {
+                    self?.applyThemePreference()
+                }
+            }
+            .store(in: &cancellables)
     }
     
     // MARK: - Keyboard Shortcut Helpers
@@ -147,6 +166,14 @@ final class AppStore: ObservableObject {
         let nextKey = keyCodeName(for: nextPageKey)
         let modifier = useShiftModifier ? "Shift + " : ""
         return "\(modifier)\(prevKey) / \(modifier)\(nextKey)"
+    }
+
+    // MARK: - Theme Handling
+    func applyThemePreference() {
+        // Call AppDelegate to apply the theme
+        DispatchQueue.main.async {
+            AppDelegate.shared?.applyThemePreference(self.themePreference)
+        }
     }
 
     func configure(modelContext: ModelContext) {
@@ -671,6 +698,11 @@ final class AppStore: ObservableObject {
         // Trigger UI updates
         self.triggerFolderUpdate()
         self.triggerGridRefresh()
+        
+        // Remove any empty pages that might have been created
+        DispatchQueue.main.async {
+            self.removeEmptyPages()
+        }
     }
     
     /// Remove deleted applications
@@ -860,7 +892,7 @@ final class AppStore: ObservableObject {
             }
         }
 
-        // Step 2: Add new free apps (not in any folder) to the end of the last page
+        // Step 2: Add new free apps (not in any folder) to existing pages with available space
         let existingAppPaths = Set(newItems.compactMap { item in
             if case let .app(app) = item { return app.url.path } else { return nil }
         })
@@ -870,28 +902,60 @@ final class AppStore: ObservableObject {
         }
         
         if !newFreeApps.isEmpty {
-
-            // Calculate last page information
+            // Calculate items per page
             let itemsPerPage = self.itemsPerPage
-            let currentPages = (newItems.count + itemsPerPage - 1) / itemsPerPage
-            let lastPageStart = currentPages > 0 ? (currentPages - 1) * itemsPerPage : 0
-            let lastPageEnd = newItems.count
-
-            // If there is space on the last page, add to the end
-            if lastPageEnd < lastPageStart + itemsPerPage {
-                for app in newFreeApps {
+            
+            // Distribute new apps across existing pages with available space
+            var appsToAdd = newFreeApps
+            var currentIndex = 0
+            
+            // First, try to fill existing pages that have empty slots
+            while !appsToAdd.isEmpty && currentIndex < newItems.count {
+                let pageStart = (currentIndex / itemsPerPage) * itemsPerPage
+                let pageEnd = min(pageStart + itemsPerPage, newItems.count)
+                
+                // Count empty slots on this page
+                var emptySlots = 0
+                for i in pageStart..<pageEnd {
+                    if case .empty = newItems[i] {
+                        emptySlots += 1
+                    }
+                }
+                
+                // Fill available empty slots with new apps
+                let appsToPlace = min(emptySlots, appsToAdd.count)
+                if appsToPlace > 0 {
+                    var appIndex = 0
+                    for i in pageStart..<pageEnd where appIndex < appsToPlace {
+                        if case .empty = newItems[i] {
+                            newItems[i] = .app(appsToAdd[appIndex])
+                            appIndex += 1
+                        }
+                    }
+                    appsToAdd.removeFirst(appsToPlace)
+                }
+                
+                currentIndex = pageEnd
+            }
+            
+            // If there are still apps to add, append them to the end
+            if !appsToAdd.isEmpty {
+                // Add remaining apps
+                for app in appsToAdd {
                     newItems.append(.app(app))
                 }
-            } else {
-                // If the last page is full, a new page needs to be created
-                // First fill the last page to completion
-                let remainingSlots = itemsPerPage - (lastPageEnd - lastPageStart)
-                for _ in 0..<remainingSlots {
-                    newItems.append(.empty(UUID().uuidString))
-                }
-                // Then add new apps to the new page
-                for app in newFreeApps {
-                    newItems.append(.app(app))
+                
+                // Ensure the last page is complete (fill with empty slots if needed)
+                let currentPages = (newItems.count + itemsPerPage - 1) / itemsPerPage
+                let lastPageStart = currentPages > 0 ? (currentPages - 1) * itemsPerPage : 0
+                let lastPageEnd = newItems.count
+                
+                // If the last page is not complete, fill empty slots
+                if lastPageEnd < lastPageStart + itemsPerPage {
+                    let remainingSlots = itemsPerPage - (lastPageEnd - lastPageStart)
+                    for _ in 0..<remainingSlots {
+                        newItems.append(.empty(UUID().uuidString))
+                    }
                 }
             }
         }
@@ -922,8 +986,46 @@ final class AppStore: ObservableObject {
         }
 
         // Add new apps
-        for app in newApps {
-            if !appsInFolders.contains(app) && !freeApps.contains(app) {
+        var appsToAdd = newApps.filter { !appsInFolders.contains($0) && !freeApps.contains($0) }
+        
+        if !appsToAdd.isEmpty {
+            // Calculate items per page
+            let itemsPerPage = self.itemsPerPage
+            
+            // Distribute new apps across existing pages with available space
+            var currentIndex = 0
+            
+            // First, try to fill existing pages that have empty slots
+            while !appsToAdd.isEmpty && currentIndex < newItems.count {
+                let pageStart = (currentIndex / itemsPerPage) * itemsPerPage
+                let pageEnd = min(pageStart + itemsPerPage, newItems.count)
+                
+                // Count empty slots on this page
+                var emptySlots = 0
+                for i in pageStart..<pageEnd {
+                    if case .empty = newItems[i] {
+                        emptySlots += 1
+                    }
+                }
+                
+                // Fill available empty slots with new apps
+                let appsToPlace = min(emptySlots, appsToAdd.count)
+                if appsToPlace > 0 {
+                    var appIndex = 0
+                    for i in pageStart..<pageEnd where appIndex < appsToPlace {
+                        if case .empty = newItems[i] {
+                            newItems[i] = .app(appsToAdd[appIndex])
+                            appIndex += 1
+                        }
+                    }
+                    appsToAdd.removeFirst(appsToPlace)
+                }
+                
+                currentIndex = pageEnd
+            }
+            
+            // If there are still apps to add, append them to the end
+            for app in appsToAdd {
                 newItems.append(.app(app))
             }
         }
@@ -2118,8 +2220,8 @@ final class AppStore: ObservableObject {
         currentPage = 0
         if !searchText.isEmpty { searchText = "" }
 
-        // Do not reset hasAppliedOrderFromStore, keep layout data
-        hasPerformedInitialScan = true
+        // Reset scan flag to force re-scan
+        hasPerformedInitialScan = false
 
         // Execute the same scan paths as the first launch (keep existing order, new ones at the end)
         scanApplicationsWithOrderPreservation()
