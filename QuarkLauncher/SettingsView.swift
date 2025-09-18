@@ -60,6 +60,22 @@ struct SettingsView: View {
                     .background(Color(.controlBackgroundColor).opacity(0.3))
                     .cornerRadius(12)
                     
+                    // Theme preference
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Appearance")
+                            .fontWeight(.medium)
+                        Picker("Theme", selection: $appStore.themePreference) {
+                            Text("System").tag("system")
+                            Text("Light").tag("light")
+                            Text("Dark").tag("dark")
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                    }
+                    .padding()
+                    .background(Color(.controlBackgroundColor).opacity(0.3))
+                    .cornerRadius(12)
+                    
                     // Scrolling sensitivity
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {

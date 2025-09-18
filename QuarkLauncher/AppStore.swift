@@ -52,6 +52,13 @@ final class AppStore: ObservableObject {
         }
     }
     
+    // Theme preference
+    @Published var themePreference: String = "system" { // "system", "light", "dark"
+        didSet {
+            UserDefaults.standard.set(themePreference, forKey: "themePreference")
+        }
+    }
+    
     // Cache manager
     private let cacheManager = AppCacheManager.shared
     
@@ -125,6 +132,18 @@ final class AppStore: ObservableObject {
         self.nextPageKey = UInt16(savedNextKey ?? 124) // Default: Right Arrow
         
         self.useShiftModifier = UserDefaults.standard.bool(forKey: "useShiftModifier")
+        
+        // Load theme preference
+        self.themePreference = UserDefaults.standard.string(forKey: "themePreference") ?? "system"
+        
+        // Observe theme preference changes
+        $themePreference
+            .sink { [weak self] _ in
+                DispatchQueue.main.async {
+                    self?.applyThemePreference()
+                }
+            }
+            .store(in: &cancellables)
     }
     
     // MARK: - Keyboard Shortcut Helpers
@@ -147,6 +166,14 @@ final class AppStore: ObservableObject {
         let nextKey = keyCodeName(for: nextPageKey)
         let modifier = useShiftModifier ? "Shift + " : ""
         return "\(modifier)\(prevKey) / \(modifier)\(nextKey)"
+    }
+
+    // MARK: - Theme Handling
+    func applyThemePreference() {
+        // Call AppDelegate to apply the theme
+        DispatchQueue.main.async {
+            AppDelegate.shared?.applyThemePreference(self.themePreference)
+        }
     }
 
     func configure(modelContext: ModelContext) {

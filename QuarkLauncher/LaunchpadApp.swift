@@ -184,6 +184,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         applyCornerRadius()
         window?.orderFrontRegardless()
         window?.makeKey()
+        
+        // Apply theme preference
+        appStore.applyThemePreference()
+        
         lastShowAt = Date()
         NotificationCenter.default.post(name: .launchpadWindowShown, object: nil)
         
@@ -223,6 +227,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             window.makeKey()
             window.makeKeyAndOrderFront(nil)
             window.orderFrontRegardless()
+            
+            // Apply theme preference
+            self.appStore.applyThemePreference()
             
             // Update state and post notifications last
             self.lastShowAt = Date()
@@ -332,6 +339,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc private func handleBackgroundClick() {
         if appStore.isFullscreenMode && appStore.openFolder == nil && !appStore.isFolderNameEditing {
             hideWindow()
+        }
+    }
+    
+    // MARK: - Theme Handling
+    func applyThemePreference(_ preference: String) {
+        guard let window = window else { return }
+        
+        switch preference {
+        case "light":
+            window.appearance = NSAppearance(named: .aqua)
+        case "dark":
+            window.appearance = NSAppearance(named: .darkAqua)
+        default: // "system"
+            window.appearance = nil // Use system default
         }
     }
 }
