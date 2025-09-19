@@ -206,7 +206,9 @@ struct LaunchpadView: View {
                     }
                     .buttonStyle(.plain)
                     .sheet(isPresented: $appStore.isSetting) {
-                        SettingsView(appStore: appStore)
+                        RedesignedSettingsView(appStore: appStore)
+                            .frame(minWidth: 700, minHeight: 500)
+                            .preferredColorScheme(.light) // Ensure consistent appearance
                     }
                 }
                 .padding(.top)
