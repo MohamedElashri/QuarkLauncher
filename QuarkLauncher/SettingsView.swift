@@ -21,16 +21,6 @@ struct SettingsView: View {
             }
             .listStyle(SidebarListStyle())
             .navigationTitle("Settings")
-            .toolbar {
-                ToolbarItem(placement: .navigation) {
-                    Button(action: {
-                        appStore.isSetting = false
-                    }) {
-                        Image(systemName: "xmark")
-                            .font(.title2)
-                    }
-                }
-            }
             
             // Default view when no tab is selected
             GeneralSettingsView(appStore: appStore)
