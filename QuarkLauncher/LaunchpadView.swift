@@ -205,9 +205,6 @@ struct LaunchpadView: View {
                             .foregroundStyle(.placeholder.opacity(0.5))
                     }
                     .buttonStyle(.plain)
-                    .sheet(isPresented: $appStore.isSetting) {
-                        SettingsView(appStore: appStore)
-                    }
                 }
                 .padding(.top)
                 .padding(.horizontal)
