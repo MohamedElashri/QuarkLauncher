@@ -84,14 +84,6 @@ struct GeneralSettingsView: View {
                 }
                 .padding(.bottom, 10)
                 
-                // Info section
-                SettingsCard("About") {
-                    Text("Automatically run in background: add QuarkLauncher to dock or use keyboard shortcuts to open the application window")
-                        .font(.callout)
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                
                 // General settings
                 SettingsCard("Display") {
                     Toggle("Classic Launchpad (Fullscreen)", isOn: $appStore.isFullscreenMode)
@@ -431,6 +423,14 @@ struct ActionSettingsView: View {
                         .buttonStyle(.bordered)
                         .controlSize(.large)
                     }
+                }
+                
+                // About section
+                SettingsCard("About") {
+                    Text("Automatically run in background: add QuarkLauncher to dock or use keyboard shortcuts to open the application window")
+                        .font(.callout)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 
                 Spacer()

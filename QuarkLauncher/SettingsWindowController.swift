@@ -54,9 +54,7 @@ class SettingsWindowController: NSWindowController, NSWindowDelegate {
     }
     
     func windowDidResignKey(_ notification: Notification) {
-        // When the window loses focus, hide it
-        if let window = notification.object as? NSWindow {
-            window.orderOut(nil)
-        }
+        // Don't automatically hide the window when it loses focus
+        // Users should be able to keep the settings window open
     }
 }
