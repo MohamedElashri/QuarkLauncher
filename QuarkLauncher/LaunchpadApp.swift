@@ -51,6 +51,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var isShowingAboutDialog = false
     private var lastMenuActionTime: Date = Date.distantPast
     private let menuActionThrottle: TimeInterval = 0.3 // Prevent rapid clicks
+    private var globalClickMonitor: Any? = nil
     
     let appStore = AppStore()
     var modelContainer: ModelContainer?
@@ -234,6 +235,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             // Update state and post notifications last
             self.lastShowAt = Date()
             NotificationCenter.default.post(name: .launchpadWindowShown, object: nil)
+            
+            // Set up global click monitoring for window mode
+            self.setupGlobalClickMonitoring()
         }
     }
     
@@ -245,6 +249,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         appStore.openFolder = nil
         appStore.saveAllOrder()
         NotificationCenter.default.post(name: .launchpadWindowHidden, object: nil)
+        
+        // Remove global click monitoring when window is hidden
+        removeGlobalClickMonitoring()
     }
     
     func updateWindowMode(isFullscreen: Bool) {
@@ -289,6 +296,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         } completionHandler: {
             // Single display update after all changes complete
             window.display()
+            
+            // Update global click monitoring based on new mode
+            if window.isVisible {
+                self.setupGlobalClickMonitoring()
+            }
         }
         
         CATransaction.commit()
@@ -337,9 +349,48 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     
     @objc private func handleBackgroundClick() {
-        if appStore.isFullscreenMode && appStore.openFolder == nil && !appStore.isFolderNameEditing {
+        // Hide window when clicking background in fullscreen mode or when folders/editing aren't active
+        if (appStore.isFullscreenMode || !appStore.isFullscreenMode) && appStore.openFolder == nil && !appStore.isFolderNameEditing {
             hideWindow()
         }
+    }
+    
+    // MARK: - Global Click Monitoring
+    private func setupGlobalClickMonitoring() {
+        // Only set up global monitoring for window mode (not fullscreen)
+        guard !appStore.isFullscreenMode else { return }
+        
+        removeGlobalClickMonitoring() // Remove any existing monitor first
+        
+        globalClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            guard let self = self, let window = self.window else { return }
+            
+            // Don't hide if settings are open or showing dialogs
+            guard !self.appStore.isSetting && !self.isShowingAboutDialog else { return }
+            
+            // Get the click location in screen coordinates
+            let clickLocation = NSEvent.mouseLocation
+            let windowFrame = window.frame
+            
+            // Check if click is outside the window
+            if !windowFrame.contains(clickLocation) {
+                // Only hide if no folder is open and not editing folder names
+                if self.appStore.openFolder == nil && !self.appStore.isFolderNameEditing {
+                    self.hideWindow()
+                }
+            }
+        }
+    }
+    
+    private func removeGlobalClickMonitoring() {
+        if let monitor = globalClickMonitor {
+            NSEvent.removeMonitor(monitor)
+            globalClickMonitor = nil
+        }
+    }
+    
+    func applicationWillTerminate(_ notification: Notification) {
+        removeGlobalClickMonitoring()
     }
     
     // MARK: - Theme Handling
