@@ -54,11 +54,14 @@ struct LaunchpadItemButton: View {
                         RoundedRectangle(cornerRadius: iconSize * 0.2)
                             .foregroundStyle(Color.clear)
                             .frame(width: iconSize * 0.8, height: iconSize * 0.8)
-                            .glassEffect(in: RoundedRectangle(cornerRadius: iconSize * 0.2))
-                            .shadow(radius: 3)
+                            .background(
+                                VisualEffectView(material: .selection, blendingMode: .withinWindow)
+                                    .clipShape(RoundedRectangle(cornerRadius: iconSize * 0.2))
+                            )
+                            .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
                             .overlay(
                                 RoundedRectangle(cornerRadius: iconSize * 0.2)
-                                    .stroke(Color.foundary.opacity(0.5), lineWidth: 1)
+                                    .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
                             )
                     }
                     

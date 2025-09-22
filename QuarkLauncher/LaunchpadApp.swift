@@ -52,7 +52,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var lastMenuActionTime: Date = Date.distantPast
     private let menuActionThrottle: TimeInterval = 0.3 // Prevent rapid clicks
     private var globalClickMonitor: Any? = nil
-    
+    private var settingsWindowController: SettingsWindowController?
+
     let appStore = AppStore()
     var modelContainer: ModelContainer?
     
@@ -192,18 +193,56 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         lastShowAt = Date()
         NotificationCenter.default.post(name: .launchpadWindowShown, object: nil)
         
-        if let contentView = window?.contentView {
-            let clickGesture = NSClickGestureRecognizer(target: self, action: #selector(handleBackgroundClick))
-            contentView.addGestureRecognizer(clickGesture)
-        }
+        // Set up global click monitoring to handle clicks outside the window
+        setupGlobalClickMonitoring()
     }
     
     func showSettings() {
-        // Quick state update first
-        appStore.isSetting = true
+        // Create or show the settings window
+        if settingsWindowController == nil {
+            settingsWindowController = SettingsWindowController(appStore: appStore)
+        }
         
-        // Then show the window - this is now more responsive since state change happens immediately
-        showWindow()
+        guard let settingsWindow = settingsWindowController?.window else { return }
+        
+        // Ensure the settings window appears on top initially
+        settingsWindow.level = .floating
+        settingsWindow.orderFrontRegardless()
+        settingsWindow.makeKeyAndOrderFront(nil)
+        
+        // Set up window ordering behavior so it can go behind the main window when needed
+        setupSettingsWindowOrdering()
+    }
+    
+    private func setupSettingsWindowOrdering() {
+        guard let settingsWindow = settingsWindowController?.window,
+              let mainWindow = window else { return }
+        
+        // Set up a notification observer to handle main window becoming key
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeKeyNotification,
+            object: mainWindow,
+            queue: .main
+        ) { [weak self] _ in
+            // When main window becomes key, move settings window behind it
+            if let settingsWindow = self?.settingsWindowController?.window {
+                settingsWindow.level = .normal
+                settingsWindow.order(.below, relativeTo: mainWindow.windowNumber)
+            }
+        }
+        
+        // Set up a notification observer to handle settings window becoming key
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeKeyNotification,
+            object: settingsWindow,
+            queue: .main
+        ) { [weak self] _ in
+            // When settings window becomes key, bring it to front
+            if let settingsWindow = self?.settingsWindowController?.window {
+                settingsWindow.level = .floating
+                settingsWindow.orderFront(nil)
+            }
+        }
     }
     
     func showWindow() {
@@ -348,18 +387,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return false
     }
     
-    @objc private func handleBackgroundClick() {
-        // Hide window when clicking background in fullscreen mode or when folders/editing aren't active
-        if (appStore.isFullscreenMode || !appStore.isFullscreenMode) && appStore.openFolder == nil && !appStore.isFolderNameEditing {
-            hideWindow()
-        }
-    }
-    
     // MARK: - Global Click Monitoring
     private func setupGlobalClickMonitoring() {
-        // Only set up global monitoring for window mode (not fullscreen)
-        guard !appStore.isFullscreenMode else { return }
-        
         removeGlobalClickMonitoring() // Remove any existing monitor first
         
         globalClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
@@ -391,6 +420,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     
     func applicationWillTerminate(_ notification: Notification) {
         removeGlobalClickMonitoring()
+        // Clean up notification observers
+        NotificationCenter.default.removeObserver(self)
     }
     
     // MARK: - Theme Handling

@@ -86,18 +86,18 @@ struct LaunchpadView: View {
                     searchedApps.insert(app.url.path)
                 }
             case .folder(let folder):
-                // 检查文件夹名称
+                // Check folder name
                 if folder.name.localizedCaseInsensitiveContains(appStore.searchText) {
                     result.append(.folder(folder))
                 }
                 
-                // 检查文件夹内的应用，如果匹配则提取出来直接显示
+                // Then search apps within the folder
                 let matchingApps = folder.apps.filter { app in
                     app.name.localizedCaseInsensitiveContains(appStore.searchText)
                 }
                 for app in matchingApps {
                     if !searchedApps.contains(app.url.path) {
-                        // 确保应用对象有效且图标可用
+                        // Ensure the app object is valid and has an icon
                         let icon = app.icon.size.width > 0 ? app.icon : NSWorkspace.shared.icon(forFile: app.url.path)
                         let validApp = AppInfo(
                             name: app.name,
@@ -173,13 +173,13 @@ struct LaunchpadView: View {
             let actualHorizontalPadding = config.isFullscreen ? geo.size.width * config.horizontalPadding : 0
             
             VStack {
-                // 在顶部添加动态padding（全屏模式）
+                // Add dynamic padding above the grid
                 if config.isFullscreen {
                     Spacer()
                         .frame(height: actualTopPadding)
                 }
                 HStack(spacing: 8) {
-                    TextField("Search", text: $appStore.searchText)
+                    TextField("Search", text: $appStore.searchText, prompt: Text("Search").foregroundColor(.secondary))
                     .disabled(isFolderOpen)
                     .onChange(of: appStore.searchText) {
                         guard !isFolderOpen else { return }
@@ -193,18 +193,27 @@ struct LaunchpadView: View {
                         }
                     }
                     .focused($isSearchFieldFocused)
-                    .font(.title)
-                    .textFieldStyle(.plain)
+                    .font(.title2)
+                    .textFieldStyle(.roundedBorder)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.primary.opacity(0.05))
+                    )
                     Spacer()
                     
                     Button {
                         appStore.isSetting = true
                     } label: {
                         Image(systemName: "ellipsis.circle")
-                            .font(.title)
-                            .foregroundStyle(.placeholder.opacity(0.5))
+                            .font(.title2)
+                            .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
+                    .background(
+                        Circle()
+                            .fill(Color.primary.opacity(0.05))
+                            .frame(width: 32, height: 32)
+                    )
                 }
                 .padding(.top)
                 .padding(.horizontal)
@@ -212,8 +221,8 @@ struct LaunchpadView: View {
                 .allowsHitTesting(!isFolderOpen)
                 
                 Divider()
-                    .foregroundStyle(.placeholder)
-                    .padding()
+                    .background(Color.primary.opacity(0.1))
+                    .padding(.horizontal)
                     .opacity(isFolderOpen ? 0.1 : 1)
                 
                 GeometryReader { geo in
@@ -242,11 +251,11 @@ struct LaunchpadView: View {
                     } else {
                         let hStackOffset = -CGFloat(appStore.currentPage) * effectivePageWidth
                         ZStack(alignment: .topLeading) {
-                            // 内容
+                            // Content
                             HStack(spacing: config.pageSpacing) {
                                 ForEach(pages.indices, id: \.self) { index in
                                     VStack(alignment: .leading, spacing: 0) {
-                                        // 在网格上方添加动态padding
+                                        // Add dynamic padding above the grid
                                         if config.isFullscreen {
                                             Spacer()
                                                 .frame(height: actualTopPadding)
@@ -337,8 +346,10 @@ struct LaunchpadView: View {
                     HStack(spacing: 8) {
                         ForEach(0..<pages.count, id: \.self) { index in
                             Circle()
-                                .fill(appStore.currentPage == index ? Color.gray : Color.gray.opacity(0.3))
-                                .frame(width: 8, height: 8)
+                                .fill(appStore.currentPage == index ? Color.primary : Color.primary.opacity(0.3))
+                                .frame(width: 6, height: 6)
+                                .scaleEffect(appStore.currentPage == index ? 1.2 : 1.0)
+                                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: appStore.currentPage)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
                                     navigateToPage(index)
@@ -359,7 +370,9 @@ struct LaunchpadView: View {
             .padding(.horizontal, actualHorizontalPadding)
         }
         .padding()
-        .glassEffect(.regular , in: RoundedRectangle(cornerRadius: appStore.isFullscreenMode ? 0 : 30))
+        .background(
+            LaunchpadBackgroundView(isFullscreen: appStore.isFullscreenMode)
+        )
         // Add explicit animation for corner radius changes to match window animation
         .animation(LNAnimations.fullscreenTransition, value: appStore.isFullscreenMode)
         .ignoresSafeArea()
@@ -701,7 +714,7 @@ extension LaunchpadView {
         windowObserver = NotificationCenter.default.addObserver(forName: .launchpadWindowShown, object: nil, queue: .main) { _ in
             isKeyboardNavigationActive = false
             selectedIndex = 0
-            isSearchFieldFocused = true
+            // Don't auto-focus search field - let user manually click it if needed
             if !appStore.apps.isEmpty {
                 appStore.applyOrderAndFolders()
             }
@@ -1441,11 +1454,14 @@ struct DragPreviewItem: View {
                     RoundedRectangle(cornerRadius: iconSize * 0.2)
                         .foregroundStyle(Color.clear)
                         .frame(width: iconSize * 0.8, height: iconSize * 0.8)
-                        .glassEffect(in: RoundedRectangle(cornerRadius: iconSize * 0.2))
-                        .shadow(radius: 2)
+                        .background(
+                            VisualEffectView(material: .selection, blendingMode: .withinWindow)
+                                .clipShape(RoundedRectangle(cornerRadius: iconSize * 0.2))
+                        )
+                        .shadow(color: .black.opacity(0.3), radius: 3, y: 2)
                         .overlay(
                             RoundedRectangle(cornerRadius: iconSize * 0.2)
-                                .stroke(Color.foundary.opacity(0.5), lineWidth: 1)
+                                .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
                         )
                     Image(nsImage: folder.icon(of: iconSize))
                         .resizable()
@@ -1765,6 +1781,60 @@ extension LaunchpadView {
         pendingDropIndex = nil
         folderHoverCandidateIndex = nil
         folderHoverBeganAt = nil
+    }
+}
+
+// MARK: - Launchpad Background View (macOS Launchpad Style)
+struct LaunchpadBackgroundView: View {
+    let isFullscreen: Bool
+    @Environment(\.colorScheme) private var colorScheme
+    
+    var body: some View {
+        ZStack {
+            // Base background - adapts to system appearance
+            if isFullscreen {
+                // Fullscreen mode: Launchpad-style background with subtle texture
+                ZStack {
+                    // Main background color
+                    (colorScheme == .dark ? 
+                     Color(NSColor.controlBackgroundColor).opacity(0.95) : 
+                     Color(NSColor.controlBackgroundColor))
+                        .ignoresSafeArea()
+                    
+                    // Subtle noise texture overlay for authenticity
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.primary.opacity(0.02),
+                                    Color.clear,
+                                    Color.primary.opacity(0.01)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .ignoresSafeArea()
+                        .blendMode(colorScheme == .dark ? .multiply : .overlay)
+                }
+            } else {
+                // Window mode: translucent background with system material, matching original style
+                VisualEffectView(material: .fullScreenUI, blendingMode: .behindWindow)
+                    .clipShape(RoundedRectangle(cornerRadius: 30))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 30)
+                            .strokeBorder(
+                                Color.primary.opacity(colorScheme == .dark ? 0.08 : 0.15), 
+                                lineWidth: 0.5
+                            )
+                    )
+                    .shadow(
+                        color: .black.opacity(colorScheme == .dark ? 0.7 : 0.25),
+                        radius: 25,
+                        y: 15
+                    )
+            }
+        }
     }
 }
 

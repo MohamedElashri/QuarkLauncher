@@ -58,7 +58,9 @@ struct FolderView: View {
             }
         }
         .padding()
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 30))
+        .background(
+            FolderBackgroundView()
+        )
         .transition(LNAnimations.folderOpenTransition)
         .onTapGesture {
             // When clicking non-edit area of folder view, exit edit mode if currently editing name
@@ -581,6 +583,31 @@ extension FolderView {
             if idx < 0 { selectedIndex = 0 }
         } else {
             selectedIndex = 0
+        }
+    }
+}
+
+// MARK: - Folder Background View (Original macOS Style)
+struct FolderBackgroundView: View {
+    @Environment(\.colorScheme) private var colorScheme
+    
+    var body: some View {
+        ZStack {
+            // Background with original Launchpad folder styling
+            VisualEffectView(material: .menu, blendingMode: .behindWindow)
+                .clipShape(RoundedRectangle(cornerRadius: 30))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 30)
+                        .strokeBorder(
+                            Color.primary.opacity(colorScheme == .dark ? 0.12 : 0.20), 
+                            lineWidth: 0.5
+                        )
+                )
+                .shadow(
+                    color: .black.opacity(colorScheme == .dark ? 0.8 : 0.3),
+                    radius: 20,
+                    y: 12
+                )
         }
     }
 }
