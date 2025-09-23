@@ -164,20 +164,6 @@ struct LaunchpadView: View {
         }
         return pageSlices.flatMap { $0 }
     }
-
-        var p = targetPage
-        while p < pageSlices.count {
-            if pageSlices[p].count > itemsPerPage {
-                let spilled = pageSlices[p].removeLast()
-                if p + 1 >= pageSlices.count { pageSlices.append([]) }
-                pageSlices[p + 1].insert(spilled, at: 0)
-                p += 1
-            } else {
-                p += 1
-            }
-        }
-        return pageSlices.flatMap { $0 }
-    }
     
     private func makePages(from items: [LaunchpadItem]) -> [[LaunchpadItem]] {
         guard !items.isEmpty else { return [] }
@@ -249,9 +235,9 @@ struct LaunchpadView: View {
                 GeometryReader { geo in
                     let layoutConfig = calculateOptimizedLayout(for: geo, actualTopPadding: actualTopPadding, actualBottomPadding: actualBottomPadding)
                     let appCountPerRow = config.columns
-                    let maxRowsPerPage = Int(ceil(Double(config.itemsPerPage) / Double(appCountPerRow)))
-                    let availableWidth = geo.size.width
-                    let availableHeight = geo.size.height - (actualTopPadding + actualBottomPadding)
+                    let _ = Int(ceil(Double(config.itemsPerPage) / Double(appCountPerRow)))
+                    let _ = geo.size.width
+                    let _ = geo.size.height - (actualTopPadding + actualBottomPadding)
                     
                     let appHeight = layoutConfig.height
                     let columnWidth = layoutConfig.width

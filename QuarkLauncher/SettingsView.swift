@@ -18,6 +18,7 @@ struct SettingsView: View {
                 NavigationLink("Navigation", destination: NavigationSettingsView(appStore: appStore))
                 NavigationLink("Data", destination: DataManagerView(appStore: appStore))
                 NavigationLink("Actions", destination: ActionSettingsView(appStore: appStore, showResetConfirm: $showResetConfirm))
+                NavigationLink("About", destination: AboutSettingsView(appStore: appStore))
             }
             .listStyle(SidebarListStyle())
             .navigationTitle("Settings")
@@ -425,8 +426,41 @@ struct ActionSettingsView: View {
                     }
                 }
                 
-                // About section
-                SettingsCard("About") {
+                Spacer()
+            }
+            .padding()
+        }
+        .navigationTitle("Actions")
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - About Settings View
+struct AboutSettingsView: View {
+    @ObservedObject var appStore: AppStore
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                // App information
+                SettingsCard("QuarkLauncher") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Version")
+                                .fontWeight(.medium)
+                            Spacer()
+                            Text("v\(getVersion())")
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Text("A modern launcher for macOS")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                // Usage information
+                SettingsCard("Usage") {
                     Text("Automatically run in background: add QuarkLauncher to dock or use keyboard shortcuts to open the application window")
                         .font(.callout)
                         .foregroundColor(.secondary)
@@ -437,8 +471,12 @@ struct ActionSettingsView: View {
             }
             .padding()
         }
-        .navigationTitle("Actions")
+        .navigationTitle("About")
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    func getVersion() -> String {
+        return Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
     }
 }
 
