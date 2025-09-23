@@ -269,6 +269,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // Create controller if needed
         if settingsWindowController == nil {
             settingsWindowController = SettingsWindowController(appStore: appStore)
+            // Ensure the new window picks up the current theme immediately
+            applyThemePreference(appStore.themePreference)
         }
         appStore.isSetting = true
         settingsWindowController?.present(centeredRelativeTo: window, animate: true)
@@ -552,15 +554,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     
     // MARK: - Theme Handling
     func applyThemePreference(_ preference: String) {
-        guard let window = window else { return }
+        // Apply to both main and settings windows
+        let mainWindow = window
+        let settingsWindow = settingsWindowController?.window
         
-        switch preference {
-        case "light":
-            window.appearance = NSAppearance(named: .aqua)
-        case "dark":
-            window.appearance = NSAppearance(named: .darkAqua)
-        default: // "system"
-            window.appearance = nil // Use system default
-        }
+        let appearance: NSAppearance? = {
+            switch preference {
+            case "light":
+                return NSAppearance(named: .aqua)
+            case "dark":
+                return NSAppearance(named: .darkAqua)
+            default:
+                return nil // Follow system
+            }
+        }()
+        
+        mainWindow?.appearance = appearance
+        settingsWindow?.appearance = appearance
     }
 }
