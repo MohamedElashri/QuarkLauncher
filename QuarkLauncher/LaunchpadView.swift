@@ -127,7 +127,14 @@ struct LaunchpadView: View {
     }
     
     private var visualItems: [LaunchpadItem] {
-        guard let dragging = draggingItem, let pending = pendingDropIndex else { return filteredItems }
+        guard let dragging = draggingItem else { return filteredItems }
+        
+        // When creating a folder, keep the current visual arrangement but don't do any reordering
+        if appStore.isDragCreatingFolder {
+            return filteredItems
+        }
+        
+        guard let pending = pendingDropIndex else { return filteredItems }
         let itemsPerPage = config.itemsPerPage
         var pageSlices: [[LaunchpadItem]] = makePages(from: filteredItems)
 
@@ -143,6 +150,20 @@ struct LaunchpadView: View {
         while pageSlices.count <= targetPage { pageSlices.append([]) }
         let localIndex = max(0, min(localIndexDesired, pageSlices[targetPage].count))
         pageSlices[targetPage].insert(dragging, at: localIndex)
+
+        var p = targetPage
+        while p < pageSlices.count {
+            if pageSlices[p].count > itemsPerPage {
+                let spilled = pageSlices[p].removeLast()
+                if p + 1 >= pageSlices.count { pageSlices.append([]) }
+                pageSlices[p + 1].insert(spilled, at: 0)
+                p += 1
+            } else {
+                p += 1
+            }
+        }
+        return pageSlices.flatMap { $0 }
+    }
 
         var p = targetPage
         while p < pageSlices.count {
@@ -1537,31 +1558,20 @@ extension LaunchpadView {
         // Handle special case: drag to create folder
         if appStore.isDragCreatingFolder, case .app(let app) = dragging {
             if let targetApp = appStore.folderCreationTarget {
-                if let insertAt = filteredItems.firstIndex(of: .app(targetApp)) {
-                    let newFolder = appStore.createFolder(with: [app, targetApp], insertAt: insertAt)
-                    if let folderIndex = filteredItems.firstIndex(of: .folder(newFolder)) {
-                        let targetCenter = cellCenter(for: folderIndex,
-                                                      in: containerSize,
-                                                      pageIndex: appStore.currentPage,
-                                                      columnWidth: columnWidth,
-                                                      appHeight: appHeight)
-                        withAnimation(LNAnimations.springFast) {
-                            dragPreviewPosition = targetCenter
-                            dragPreviewScale = 1.0
-                        }
-                    }
-                } else {
-                    let newFolder = appStore.createFolder(with: [app, targetApp])
-                    if let folderIndex = filteredItems.firstIndex(of: .folder(newFolder)) {
-                        let targetCenter = cellCenter(for: folderIndex,
-                                                      in: containerSize,
-                                                      pageIndex: appStore.currentPage,
-                                                      columnWidth: columnWidth,
-                                                      appHeight: appHeight)
-                        withAnimation(LNAnimations.springFast) {
-                            dragPreviewPosition = targetCenter
-                            dragPreviewScale = 1.0
-                        }
+                // Use the current items (which includes visual reordering) to find the correct insertion position
+                let insertAt = currentItems.firstIndex(of: .app(targetApp))
+                let newFolder = appStore.createFolder(with: [app, targetApp], insertAt: insertAt)
+                
+                // Find the folder in the updated items after creation
+                if let folderIndex = appStore.items.firstIndex(of: .folder(newFolder)) {
+                    let targetCenter = cellCenter(for: folderIndex,
+                                                  in: containerSize,
+                                                  pageIndex: pageOf(index: folderIndex),
+                                                  columnWidth: columnWidth,
+                                                  appHeight: appHeight)
+                    withAnimation(LNAnimations.springFast) {
+                        dragPreviewPosition = targetCenter
+                        dragPreviewScale = 1.0
                     }
                 }
             } else {
@@ -1570,8 +1580,8 @@ extension LaunchpadView {
                                                pageIndex: appStore.currentPage,
                                                columnWidth: columnWidth,
                                                appHeight: appHeight),
-                   filteredItems.indices.contains(hoveringIndex),
-                   case .folder(let folder) = filteredItems[hoveringIndex] {
+                   currentItems.indices.contains(hoveringIndex),
+                   case .folder(let folder) = currentItems[hoveringIndex] {
                     appStore.addAppToFolder(app, folder: folder)
                     let targetCenter = cellCenter(for: hoveringIndex,
                                                   in: containerSize,
