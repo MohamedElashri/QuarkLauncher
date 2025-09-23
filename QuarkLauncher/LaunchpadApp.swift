@@ -11,6 +11,18 @@ extension Notification.Name {
 class BorderlessWindow: NSWindow {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
+    
+    override func becomeKey() {
+        super.becomeKey()
+        // Ensure we're always responsive to mouse events
+        self.acceptsMouseMovedEvents = true
+    }
+    
+    override func resignKey() {
+        super.resignKey()
+        // Keep accepting mouse events even when not key
+        self.acceptsMouseMovedEvents = true
+    }
 }
 
 @main
@@ -52,6 +64,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var lastMenuActionTime: Date = Date.distantPast
     private let menuActionThrottle: TimeInterval = 0.3 // Prevent rapid clicks
     private var globalClickMonitor: Any? = nil
+    private var localClickMonitor: Any? = nil
     private var settingsWindowController: SettingsWindowController?
 
     let appStore = AppStore()
@@ -70,6 +83,51 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         appStore.startAutoRescan()
         
         if appStore.isFullscreenMode { updateWindowMode(isFullscreen: true) }
+        
+        // Set up application deactivation monitoring as backup
+        setupApplicationDeactivationMonitoring()
+    }
+    
+    private func setupApplicationDeactivationMonitoring() {
+        // Monitor when the app becomes inactive as an additional way to detect outside clicks
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didResignActiveNotification,
+            object: NSApp,
+            queue: .main
+        ) { [weak self] _ in
+            // Small delay to allow for potential reactivation
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self?.handleApplicationDeactivation()
+            }
+        }
+        
+        // Also monitor when the app becomes active to set up click monitoring properly
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: NSApp,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleApplicationActivation()
+        }
+    }
+    
+    private func handleApplicationDeactivation() {
+        // Only hide if not showing settings or dialogs and window is visible
+        guard let window = window, window.isVisible else { return }
+        guard !appStore.isSetting && !isShowingAboutDialog else { return }
+        guard appStore.openFolder == nil && !appStore.isFolderNameEditing else { return }
+        
+        // Check if we're losing focus to another app (not just switching within our app)
+        if NSApp.isActive == false {
+            hideWindow()
+        }
+    }
+    
+    private func handleApplicationActivation() {
+        // Ensure click monitoring is set up when app becomes active
+        if let window = window, window.isVisible {
+            setupGlobalClickMonitoring()
+        }
     }
     
     @objc func showAboutAction() {
@@ -157,6 +215,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window?.contentMinSize = minimumContentSize
         window?.minSize = window?.frameRect(forContentRect: NSRect(origin: .zero, size: minimumContentSize)).size ?? minimumContentSize
         
+        // Ensure the window can always become key and main
+        window?.canHide = false
+        window?.hidesOnDeactivate = false
+        
         // SwiftData support (fixed to Application Support directory to avoid data loss after app replacement)
         do {
             let fm = FileManager.default
@@ -187,14 +249,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window?.orderFrontRegardless()
         window?.makeKey()
         
+        // Ensure the app becomes active
+        NSApp.activate(ignoringOtherApps: true)
+        
         // Apply theme preference
         appStore.applyThemePreference()
         
         lastShowAt = Date()
         NotificationCenter.default.post(name: .launchpadWindowShown, object: nil)
         
-        // Set up global click monitoring to handle clicks outside the window
-        setupGlobalClickMonitoring()
+        // Set up global click monitoring to handle clicks outside the window with a delay
+        // to ensure window is fully activated
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            self.setupGlobalClickMonitoring()
+        }
     }
     
     func showSettings() {
@@ -268,6 +336,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             window.makeKeyAndOrderFront(nil)
             window.orderFrontRegardless()
             
+            // Ensure the app becomes active
+            NSApp.activate(ignoringOtherApps: true)
+            
             // Apply theme preference
             self.appStore.applyThemePreference()
             
@@ -275,8 +346,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             self.lastShowAt = Date()
             NotificationCenter.default.post(name: .launchpadWindowShown, object: nil)
             
-            // Set up global click monitoring for window mode
-            self.setupGlobalClickMonitoring()
+            // Set up global click monitoring for window mode with a slight delay
+            // to ensure window is fully activated
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self.setupGlobalClickMonitoring()
+            }
         }
     }
     
@@ -371,10 +445,34 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return sender.frameRect(forContentRect: NSRect(origin: .zero, size: clamped)).size
     }
     
-    func windowDidResignKey(_ notification: Notification) { autoHideIfNeeded() }
-    func windowDidResignMain(_ notification: Notification) { autoHideIfNeeded() }
+    func windowDidResignKey(_ notification: Notification) { 
+        // Only auto-hide if we're losing key status to a non-QuarkLauncher window
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            self.autoHideIfNeeded()
+        }
+    }
+    
+    func windowDidResignMain(_ notification: Notification) { 
+        // Only auto-hide if we're losing main status to a non-QuarkLauncher window
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            self.autoHideIfNeeded()
+        }
+    }
+    
     private func autoHideIfNeeded() {
         guard !appStore.isSetting && !isShowingAboutDialog else { return }
+        
+        // Check if any QuarkLauncher window is still key or main
+        if let keyWindow = NSApp.keyWindow,
+           keyWindow == window || keyWindow == settingsWindowController?.window {
+            return // Don't hide if our window is still key
+        }
+        
+        if let mainWindow = NSApp.mainWindow,
+           mainWindow == window || mainWindow == settingsWindowController?.window {
+            return // Don't hide if our window is still main
+        }
+        
         hideWindow()
     }
     
@@ -391,23 +489,50 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func setupGlobalClickMonitoring() {
         removeGlobalClickMonitoring() // Remove any existing monitor first
         
+        // Use both global and local monitoring for better coverage
         globalClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-            guard let self = self, let window = self.window else { return }
-            
-            // Don't hide if settings are open or showing dialogs
-            guard !self.appStore.isSetting && !self.isShowingAboutDialog else { return }
-            
-            // Get the click location in screen coordinates
-            let clickLocation = NSEvent.mouseLocation
-            let windowFrame = window.frame
-            
-            // Check if click is outside the window
-            if !windowFrame.contains(clickLocation) {
-                // Only hide if no folder is open and not editing folder names
-                if self.appStore.openFolder == nil && !self.appStore.isFolderNameEditing {
-                    self.hideWindow()
-                }
+            self?.handleGlobalClick(event: event)
+        }
+        
+        // Also add local monitoring to catch clicks that might be missed by global monitoring
+        localClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            self?.handleLocalClick(event: event)
+            return event
+        }
+    }
+    
+    private func handleGlobalClick(event: NSEvent) {
+        guard let window = self.window else { return }
+        
+        // Don't hide if settings are open or showing dialogs
+        guard !self.appStore.isSetting && !self.isShowingAboutDialog else { return }
+        
+        // Get the click location in screen coordinates
+        let clickLocation = NSEvent.mouseLocation
+        let windowFrame = window.frame
+        
+        // Check if click is outside the window
+        if !windowFrame.contains(clickLocation) {
+            // Only hide if no folder is open and not editing folder names
+            if self.appStore.openFolder == nil && !self.appStore.isFolderNameEditing {
+                self.hideWindow()
             }
+        }
+    }
+    
+    private func handleLocalClick(event: NSEvent) {
+        // For local clicks within our window, we generally don't want to hide
+        // unless the click is somehow detected as outside our content area
+        guard let window = self.window else { return }
+        
+        // Don't hide if settings are open or showing dialogs
+        guard !self.appStore.isSetting && !self.isShowingAboutDialog else { return }
+        
+        // For local events, we mainly want to ensure the window stays responsive
+        // The actual hiding logic should be handled by global click monitoring
+        // This is just to ensure our window remains properly activated
+        if !window.isKeyWindow {
+            window.makeKey()
         }
     }
     
@@ -416,12 +541,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             NSEvent.removeMonitor(monitor)
             globalClickMonitor = nil
         }
+        if let monitor = localClickMonitor {
+            NSEvent.removeMonitor(monitor)
+            localClickMonitor = nil
+        }
     }
     
     func applicationWillTerminate(_ notification: Notification) {
         removeGlobalClickMonitoring()
         // Clean up notification observers
         NotificationCenter.default.removeObserver(self)
+        // Also remove observers for NSApp
+        NotificationCenter.default.removeObserver(self, name: NSApplication.didResignActiveNotification, object: NSApp)
+        NotificationCenter.default.removeObserver(self, name: NSApplication.didBecomeActiveNotification, object: NSApp)
     }
     
     // MARK: - Theme Handling
