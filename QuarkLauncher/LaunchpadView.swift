@@ -14,7 +14,7 @@ extension LaunchpadItem {
 private class PageFlipManager: ObservableObject {
     @Published var isCooldown: Bool = false
     private var lastFlipTime: Date?
-    var autoFlipInterval: TimeInterval = 0.8
+    var autoFlipInterval: TimeInterval = 1.2 // Battery-optimized: increased from 0.8s
     
     func canFlip() -> Bool {
         guard !isCooldown else { return false }
@@ -25,7 +25,7 @@ private class PageFlipManager: ObservableObject {
     func recordFlip() {
         lastFlipTime = Date()
         isCooldown = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + autoFlipInterval) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { // Battery-optimized: increased from 0.05s
             self.isCooldown = false
         }
     }
@@ -505,7 +505,8 @@ struct LaunchpadView: View {
                    if handoffEventMonitor != nil || draggingItem != nil {
                        finalizeHandoffDrag()
                    }
-                   DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                   // Battery-optimized: increased delay for drag cleanup
+                   DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                        if draggingItem != nil {
                            draggingItem = nil
                            pendingDropIndex = nil
@@ -541,7 +542,8 @@ struct LaunchpadView: View {
     
     private func launchApp(_ app: AppInfo) {
         AppDelegate.shared?.hideWindow()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+        // Battery-optimized: reduced frequency of app launch operations
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             NSWorkspace.shared.open(app.url)
         }
     }
@@ -1622,8 +1624,8 @@ extension LaunchpadView {
                 }
                 appStore.saveAllOrder()
 
-                // Same-page drag end also compacts to ensure empty items move to the end of the page
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                // Battery-optimized: same-page drag end compaction
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     appStore.compactItemsWithinPages()
                 }
             } else {

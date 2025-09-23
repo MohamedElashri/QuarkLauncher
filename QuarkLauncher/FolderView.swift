@@ -380,7 +380,8 @@ extension FolderView {
                         
                         guard let dragging = draggingApp else { return }
                         defer {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                            // Battery-optimized: increased delay for cleanup operations
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                                 draggingApp = nil
                                 pendingDropIndex = nil
                                 // Don't automatically restore keyboard navigation after drag ends, maintain consistent experience
@@ -415,8 +416,8 @@ extension FolderView {
                                 folder.apps = apps
                                 appStore.saveAllOrder()
                                 
-                                // Also trigger compaction after folder internal drag ends, ensure main interface empty items move to page end
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                // Battery-optimized: also trigger compaction after folder internal drag ends
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                                     appStore.compactItemsWithinPages()
                                 }
                             }

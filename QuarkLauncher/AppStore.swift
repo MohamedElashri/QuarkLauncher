@@ -4,7 +4,14 @@ import Combine
 import SwiftData
 import UniformTypeIdentifiers
 import CoreServices
+import IOKit.ps
 
+/// AppStore manages the application data and provides battery-optimized monitoring
+/// Battery optimizations implemented:
+/// 1. FSEvents with 2-5s latency (vs 0s) based on app state and power source
+/// 2. Increased async dispatch delays from 0.05-0.1s to 0.2-0.5s
+/// 3. Combine debouncing increased from 0.5s to 2.0s for auto-save operations
+/// 4. App state awareness: reduced monitoring when in background or on battery power
 final class AppStore: ObservableObject {
     @Published var apps: [AppInfo] = []
     @Published var folders: [FolderInfo] = []
@@ -119,6 +126,12 @@ final class AppStore: ObservableObject {
     private var rescanWorkItem: DispatchWorkItem?
     private let fsEventsQueue = DispatchQueue(label: "app.store.fsevents")
     
+    // Battery optimization: App state awareness
+    @Published private var isAppInBackground: Bool = false
+    @Published private var isOnBatteryPower: Bool = false
+    private var appStateObserver: Any?
+    private var powerSourceObserver: Any?
+    
     // Computed properties
     private var itemsPerPage: Int { 35 }
     
@@ -160,6 +173,9 @@ final class AppStore: ObservableObject {
         
         // Load theme preference
         self.themePreference = UserDefaults.standard.string(forKey: "themePreference") ?? "system"
+        
+        // Battery optimization: Setup app state monitoring
+        setupAppStateMonitoring()
         
         // Observe theme preference changes
         $themePreference
@@ -221,13 +237,13 @@ final class AppStore: ObservableObject {
             }
             .store(in: &cancellables)
         
-        // Listen for items changes, auto-save ordering
+        // Listen for items changes, auto-save ordering - battery-optimized debouncing
         $items
-            .debounce(for: .seconds(0.5), scheduler: DispatchQueue.main)
+            .debounce(for: .seconds(2.0), scheduler: DispatchQueue.main) // Increased from 0.5s for better battery life
             .sink { [weak self] _ in
                 guard let self = self, !self.items.isEmpty else { return }
-                // Delayed save to avoid frequent saves
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                // Battery-optimized delayed save to avoid frequent saves
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     self.saveAllOrder()
                 }
             }
@@ -250,8 +266,8 @@ final class AppStore: ObservableObject {
         hasPerformedInitialScan = true
         scanApplicationsWithOrderPreservation()
         
-        // Generate cache after scan completes
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+        // Generate cache after scan completes - battery-optimized delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             self?.generateCacheAfterScan()
         }
     }
@@ -1111,7 +1127,75 @@ final class AppStore: ObservableObject {
         }
     }
 
+    // MARK: - Battery Optimization: App State Monitoring
+    private func setupAppStateMonitoring() {
+        // Monitor app activation/deactivation
+        appStateObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.isAppInBackground = false
+        }
+        
+        let backgroundObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.isAppInBackground = true
+        }
+        
+        // Monitor power source changes
+        powerSourceObserver = NotificationCenter.default.addObserver(
+            forName: Notification.Name("com.apple.system.powersources.source"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.updatePowerSourceStatus()
+        }
+        
+        // Initial power source check
+        updatePowerSourceStatus()
+    }
+    
+    private func updatePowerSourceStatus() {
+        // Check if running on battery power
+        let powerSources = IOPSCopyPowerSourcesInfo()
+        guard let powerSourcesInfo = powerSources?.takeRetainedValue() else {
+            isOnBatteryPower = false
+            return
+        }
+        
+        let powerSourcesList = IOPSCopyPowerSourcesList(powerSourcesInfo)
+        guard let powerSourcesArray = powerSourcesList?.takeRetainedValue() as? [CFTypeRef] else {
+            isOnBatteryPower = false
+            return
+        }
+        
+        for powerSource in powerSourcesArray {
+            if let powerSourceDict = IOPSGetPowerSourceDescription(powerSourcesInfo, powerSource)?.takeUnretainedValue() as? [String: Any] {
+                if let powerSourceState = powerSourceDict[kIOPSPowerSourceStateKey] as? String,
+                   powerSourceState == kIOPSBatteryPowerValue {
+                    isOnBatteryPower = true
+                    return
+                }
+            }
+        }
+        isOnBatteryPower = false
+    }
+    
+    private var shouldReduceMonitoring: Bool {
+        return isAppInBackground || isOnBatteryPower
+    }
+
     deinit {
+        if let observer = appStateObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = powerSourceObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
         stopAutoRescan()
     }
 
@@ -1148,8 +1232,9 @@ final class AppStore: ObservableObject {
             appStore.handleFSEvents(paths: pathsArray, flagsPointer: eventFlags, count: numEvents)
         }
 
-        let flags = FSEventStreamCreateFlags(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagNoDefer | kFSEventStreamCreateFlagUseCFTypes)
-        let latency: CFTimeInterval = 0.0
+        let flags = FSEventStreamCreateFlags(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagUseCFTypes)
+        // Battery optimization: Adjust latency based on app state and power source
+        let latency: CFTimeInterval = shouldReduceMonitoring ? 5.0 : 2.0
 
         guard let stream = FSEventStreamCreate(
             kCFAllocatorDefault,
@@ -1206,11 +1291,14 @@ final class AppStore: ObservableObject {
     }
 
     private func scheduleRescan() {
-        // Light debounce to avoid main thread pressure from frequent FSEvents triggers
+        // Battery-optimized debounce to avoid main thread pressure from frequent FSEvents triggers
         rescanWorkItem?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.performImmediateRefresh() }
         rescanWorkItem = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: work)
+        
+        // Battery optimization: Increase delay when app is in background or on battery
+        let delay: TimeInterval = shouldReduceMonitoring ? 5.0 : 1.0
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
     private func performImmediateRefresh() {
@@ -1971,8 +2059,8 @@ final class AppStore: ObservableObject {
             isGridRefreshing = true
             gridRefreshTrigger = UUID()
             
-            // Reset the flag after a short delay to allow for batching
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            // Battery-optimized: reset flag after delay to allow for batching
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
                 self?.isGridRefreshing = false
             }
         }
@@ -2251,8 +2339,8 @@ final class AppStore: ObservableObject {
         // Execute the same scan paths as the first launch (keep existing order, new ones at the end)
         scanApplicationsWithOrderPreservation()
 
-        // Generate cache after scanning is complete
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+        // Battery-optimized: generate cache after scanning is complete
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             guard let self else { return }
             self.generateCacheAfterScan()
         }
@@ -2290,10 +2378,9 @@ final class AppStore: ObservableObject {
         // Directly refresh cache to ensure all applications are included (including those within folders)
         cacheManager.refreshCache(from: apps, items: items)
 
-        // Clear search text to ensure search state is reset
-        // This avoids showing outdated results during search
+        // Battery-optimized: clear search text to ensure search state is reset
         if !searchText.isEmpty {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
                 self?.searchText = ""
             }
         }
