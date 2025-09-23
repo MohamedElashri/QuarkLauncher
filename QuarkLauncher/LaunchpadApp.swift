@@ -185,6 +185,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         
         // Ensure we're on the main thread and the app is ready
         DispatchQueue.main.async { [weak self] in
+            if let win = self?.window { win.makeFirstResponder(nil) }
             self?.showSettings()
         }
     }

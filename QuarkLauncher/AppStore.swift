@@ -83,6 +83,17 @@ final class AppStore: ObservableObject {
     @Published var folderUpdateTrigger: UUID = UUID()
     @Published var gridRefreshTrigger: UUID = UUID()
     
+    // MARK: - Search (fast, debounced)
+    @Published var searchResults: [LaunchpadItem] = []
+    private let searchQueue = DispatchQueue(label: "app.store.search", qos: .userInitiated)
+    private var searchUpdateWorkItem: DispatchWorkItem?
+    private var lowerCacheApps: [String: String] = [:]     // key: app.id (path)
+    private var lowerCacheFolders: [String: String] = [:]  // key: folder.id
+    private func clearSearchNameCaches() {
+        lowerCacheApps.removeAll(keepingCapacity: false)
+        lowerCacheFolders.removeAll(keepingCapacity: false)
+    }
+    
     var modelContext: ModelContext?
 
     // MARK: - Auto rescan (FSEvents)
@@ -159,6 +170,28 @@ final class AppStore: ObservableObject {
                 DispatchQueue.main.async {
                     self?.applyThemePreference()
                 }
+            }
+            .store(in: &cancellables)
+
+        // Fast search: react to text and data changes with a short debounce
+        $searchText
+            .removeDuplicates()
+            .debounce(for: .milliseconds(80), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in self?.scheduleSearchUpdate() }
+            .store(in: &cancellables)
+
+        $items
+            .debounce(for: .milliseconds(100), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.clearSearchNameCaches()
+                self?.scheduleSearchUpdate()
+            }
+            .store(in: &cancellables)
+
+        $folderUpdateTrigger
+            .sink { [weak self] _ in
+                self?.clearSearchNameCaches()
+                self?.scheduleSearchUpdate()
             }
             .store(in: &cancellables)
     }
@@ -287,6 +320,8 @@ final class AppStore: ObservableObject {
                 
                 // Generate cache after scan completes
                 self.generateCacheAfterScan()
+                // Update search results after data change
+                self.scheduleSearchUpdate()
             }
         }
     }
@@ -1459,6 +1494,8 @@ final class AppStore: ObservableObject {
 
         // Trigger grid view refresh to ensure the interface is updated immediately
         triggerGridRefresh()
+        // Update search results
+        scheduleSearchUpdate()
 
         // Refresh cache to ensure newly created folder apps can be found during search
         refreshCacheAfterFolderOperation()
@@ -1504,6 +1541,8 @@ final class AppStore: ObservableObject {
 
         // Trigger grid view refresh to ensure the interface is updated immediately
         triggerGridRefresh()
+        // Update search results
+        scheduleSearchUpdate()
 
         // Refresh cache to ensure newly created folder apps can be found during search
         refreshCacheAfterFolderOperation()
@@ -1561,6 +1600,8 @@ final class AppStore: ObservableObject {
 
         // Refresh cache to ensure newly created folder apps can be found during search
         refreshCacheAfterFolderOperation()
+        // Update search results
+        scheduleSearchUpdate()
         
         saveAllOrder()
     }
@@ -1590,6 +1631,8 @@ final class AppStore: ObservableObject {
 
         // Refresh cache to ensure search functionality works correctly
         refreshCacheAfterFolderOperation()
+        // Update search results
+        scheduleSearchUpdate()
         
         rebuildItems()
         saveAllOrder()
@@ -1793,6 +1836,81 @@ final class AppStore: ObservableObject {
         if newItems.count != items.count || !newItems.elementsEqual(items, by: { $0.id == $1.id }) {
             items = newItems
         }
+    }
+    
+    // MARK: - Fast Search Implementation
+    private func normalizedLower(_ s: String) -> String {
+        return s.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .lowercased()
+    }
+    
+    private func lowerName(for app: AppInfo) -> String {
+        if let cached = lowerCacheApps[app.id] { return cached }
+        let v = normalizedLower(app.name)
+        lowerCacheApps[app.id] = v
+        return v
+    }
+    
+    private func lowerName(for folder: FolderInfo) -> String {
+        if let cached = lowerCacheFolders[folder.id] { return cached }
+        let v = normalizedLower(folder.name)
+        lowerCacheFolders[folder.id] = v
+        return v
+    }
+    
+    func scheduleSearchUpdate() {
+        // Cancel previous scheduled work
+        searchUpdateWorkItem?.cancel()
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let snapshot = items // Snapshot to ensure consistency
+        
+        // Fast path: empty query -> use items directly
+        if query.isEmpty {
+            DispatchQueue.main.async { [weak self] in
+                self?.searchResults = snapshot
+            }
+            return
+        }
+        
+        let work = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            let q = self.normalizedLower(query)
+            var results: [LaunchpadItem] = []
+            results.reserveCapacity(min(64, snapshot.count))
+            var seenPaths = Set<String>()
+            seenPaths.reserveCapacity(256)
+            
+            for item in snapshot {
+                switch item {
+                case .app(let app):
+                    if self.lowerName(for: app).contains(q) {
+                        results.append(.app(app))
+                        seenPaths.insert(app.url.path)
+                    }
+                case .folder(let folder):
+                    // Match folder name
+                    if self.lowerName(for: folder).contains(q) {
+                        results.append(.folder(folder))
+                    }
+                    // Search apps within folder
+                    for app in folder.apps {
+                        if seenPaths.contains(app.url.path) { continue }
+                        if self.lowerName(for: app).contains(q) {
+                            results.append(.app(app))
+                            seenPaths.insert(app.url.path)
+                        }
+                    }
+                case .empty:
+                    continue
+                }
+            }
+            
+            DispatchQueue.main.async { [weak self] in
+                self?.searchResults = results
+            }
+        }
+        searchUpdateWorkItem = work
+        searchQueue.asyncAfter(deadline: .now() + 0.0, execute: work)
     }
     
     // MARK: - Persistence: per-page independent ordering (new) + legacy compatibility

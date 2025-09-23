@@ -72,49 +72,9 @@ struct LaunchpadView: View {
     }
     
     var filteredItems: [LaunchpadItem] {
-        guard !appStore.searchText.isEmpty else { return appStore.items }
-        
-        var result: [LaunchpadItem] = []
-        var searchedApps = Set<String>() // Used for deduplication, avoid displaying the same app multiple times
-        
-        // First search items on the main interface
-        for item in appStore.items {
-            switch item {
-            case .app(let app):
-                if app.name.localizedCaseInsensitiveContains(appStore.searchText) {
-                    result.append(.app(app))
-                    searchedApps.insert(app.url.path)
-                }
-            case .folder(let folder):
-                // Check folder name
-                if folder.name.localizedCaseInsensitiveContains(appStore.searchText) {
-                    result.append(.folder(folder))
-                }
-                
-                // Then search apps within the folder
-                let matchingApps = folder.apps.filter { app in
-                    app.name.localizedCaseInsensitiveContains(appStore.searchText)
-                }
-                for app in matchingApps {
-                    if !searchedApps.contains(app.url.path) {
-                        // Ensure the app object is valid and has an icon
-                        let icon = app.icon.size.width > 0 ? app.icon : NSWorkspace.shared.icon(forFile: app.url.path)
-                        let validApp = AppInfo(
-                            name: app.name,
-                            icon: icon,
-                            url: app.url
-                        )
-                        result.append(.app(validApp))
-                        searchedApps.insert(app.url.path)
-                    }
-                }
-                
-            case .empty:
-                break
-            }
-        }
-        
-        return result
+        let q = appStore.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if q.isEmpty { return appStore.items }
+        return appStore.searchResults
     }
     
     var pages: [[LaunchpadItem]] {
@@ -207,6 +167,12 @@ struct LaunchpadView: View {
                             .fill(Color.primary.opacity(0.05))
                     )
                     Spacer()
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            // Clicking empty space in the top bar removes focus from search
+                            isSearchFieldFocused = false
+                            NSApp.keyWindow?.makeFirstResponder(nil)
+                        }
                     
                     Button {
                         AppDelegate.shared?.showSettingsAction()
@@ -309,6 +275,8 @@ struct LaunchpadView: View {
                         
                         .coordinateSpace(name: "grid")
                         .onTapGesture {
+                            // Clicking anywhere in the grid removes focus from search
+                            isSearchFieldFocused = false
                             NSApp.keyWindow?.makeFirstResponder(nil)
                         }
                         .onAppear { }
@@ -319,7 +287,11 @@ struct LaunchpadView: View {
                             }
                         }
                         .onChange(of: appStore.openFolder) {
-                            if appStore.openFolder == nil, appStore.handoffDraggingApp != nil {
+                            // Defocus search when opening a folder
+                            if appStore.openFolder != nil {
+                                isSearchFieldFocused = false
+                                NSApp.keyWindow?.makeFirstResponder(nil)
+                            } else if appStore.handoffDraggingApp != nil {
                                 startHandoffDragIfNeeded(geo: geo, columnWidth: columnWidth, appHeight: appHeight, iconSize: iconSize)
                             }
                         }
@@ -359,6 +331,9 @@ struct LaunchpadView: View {
                                 .animation(.spring(response: 0.3, dampingFraction: 0.8), value: appStore.currentPage)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
+                                    // Defocus search when interacting with page dots
+                                    isSearchFieldFocused = false
+                                    NSApp.keyWindow?.makeFirstResponder(nil)
                                     navigateToPage(index)
                                 }
                         }
@@ -420,8 +395,7 @@ struct LaunchpadView: View {
                                     appStore.currentPage = targetPage
                                 }
                             }
-                            // After closing, restore focus to the search field
-                            isSearchFieldFocused = true
+                            // Do not auto-focus the search field; respect user's focus
                         }
                     }
 
@@ -466,8 +440,7 @@ struct LaunchpadView: View {
                                         appStore.currentPage = targetPage
                                     }
                                 }
-                                // After closing, restore focus to the search field
-                                isSearchFieldFocused = true
+                                // Do not auto-focus the search field; respect user's focus
                             },
                             onLaunchApp: { app in
                                 launchApp(app)
@@ -481,6 +454,14 @@ struct LaunchpadView: View {
                 }
             }
         )
+        // Defocus search on any tap in empty areas or background
+        .contentShape(Rectangle())
+        .simultaneousGesture(TapGesture().onEnded {
+            if isSearchFieldFocused {
+                isSearchFieldFocused = false
+                NSApp.keyWindow?.makeFirstResponder(nil)
+            }
+        })
          .onChange(of: appStore.items) {
              guard draggingItem == nil else { return }
              clampSelection()
@@ -488,6 +469,13 @@ struct LaunchpadView: View {
              if appStore.currentPage > maxPageIndex {
                  appStore.currentPage = maxPageIndex
              }
+          }
+          .onChange(of: appStore.isSetting) { _, isOpen in
+              if isOpen {
+                  // Defocus search when opening settings
+                  isSearchFieldFocused = false
+                  NSApp.keyWindow?.makeFirstResponder(nil)
+              }
           }
           .onChange(of: isSearchFieldFocused) { _, focused in
              if focused { isKeyboardNavigationActive = false }
@@ -723,6 +711,9 @@ extension LaunchpadView {
         windowObserver = NotificationCenter.default.addObserver(forName: .launchpadWindowShown, object: nil, queue: .main) { _ in
             isKeyboardNavigationActive = false
             selectedIndex = 0
+            // Explicitly defocus search when window is shown
+            isSearchFieldFocused = false
+            NSApp.keyWindow?.makeFirstResponder(nil)
             // Don't auto-focus search field - let user manually click it if needed
             if !appStore.apps.isEmpty {
                 appStore.applyOrderAndFolders()
@@ -736,6 +727,9 @@ extension LaunchpadView {
             windowHiddenObserver = nil
         }
         windowHiddenObserver = NotificationCenter.default.addObserver(forName: .launchpadWindowHidden, object: nil, queue: .main) { _ in
+            // Defocus and reset selection when window hides
+            isSearchFieldFocused = false
+            NSApp.keyWindow?.makeFirstResponder(nil)
             selectedIndex = 0
         }
     }
@@ -769,13 +763,26 @@ extension LaunchpadView {
                         appStore.currentPage = targetPage
                     }
                 }
-                // Close folder and restore focus to search field
-                isSearchFieldFocused = true
+                // Do not auto-focus the search field; respect user's focus
                 return nil
             }
             return event
         }
         
+        // Type-to-search: if search is not focused and user types printable characters, start focusing search
+        if !isSearchFieldFocused && !isFolderOpen {
+            // Ignore command/option/control shortcuts
+            let mods = event.modifierFlags.intersection([.command, .control, .option])
+            if mods.isEmpty, let chars = event.charactersIgnoringModifiers, isPrintable(chars) {
+                // Begin a search session: focus the field and seed with typed characters
+                isSearchFieldFocused = true
+                if !chars.isEmpty {
+                    appStore.searchText += chars
+                }
+                return nil
+            }
+        }
+
         guard !filteredItems.isEmpty else { return event }
         let code = event.keyCode
 
@@ -947,6 +954,13 @@ extension LaunchpadView {
     private func isIMEComposing() -> Bool {
         guard let editor = NSApp.keyWindow?.firstResponder as? NSTextView else { return false }
         return editor.hasMarkedText()
+    }
+
+    private func isPrintable(_ s: String) -> Bool {
+        // Treat non-control characters as printable; exclude newlines and tabs
+        if s.isEmpty { return false }
+        let control = CharacterSet.controlCharacters.union(.newlines)
+        return s.rangeOfCharacter(from: control) == nil
     }
 }
 
