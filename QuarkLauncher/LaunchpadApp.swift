@@ -266,19 +266,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     
     func showSettings() {
-        // Create or show the settings window
+        // Create controller if needed
         if settingsWindowController == nil {
             settingsWindowController = SettingsWindowController(appStore: appStore)
         }
-        
-        guard let settingsWindow = settingsWindowController?.window else { return }
-        
-        // Ensure the settings window appears on top initially
-        settingsWindow.level = .floating
-        settingsWindow.orderFrontRegardless()
-        settingsWindow.makeKeyAndOrderFront(nil)
-        
-        // Set up window ordering behavior so it can go behind the main window when needed
+        appStore.isSetting = true
+        settingsWindowController?.present(centeredRelativeTo: window, animate: true)
+        // Set up window ordering so it can go behind the main window when needed
         setupSettingsWindowOrdering()
     }
     

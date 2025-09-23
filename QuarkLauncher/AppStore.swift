@@ -16,31 +16,7 @@ final class AppStore: ObservableObject {
     @Published var apps: [AppInfo] = []
     @Published var folders: [FolderInfo] = []
     @Published var items: [LaunchpadItem] = []
-    @Published var isSetting = false {
-        didSet {
-            if isSetting {
-                showSettingsWindow()
-            } else {
-                hideSettingsWindow()
-            }
-        }
-    }
-    private var settingsWindowController: SettingsWindowController?
-    
-    // MARK: - Settings Window Management
-    
-    private func showSettingsWindow() {
-        if settingsWindowController == nil {
-            settingsWindowController = SettingsWindowController(appStore: self)
-        }
-        
-        settingsWindowController?.showWindow(nil)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-    
-    private func hideSettingsWindow() {
-        settingsWindowController?.close()
-    }
+    @Published var isSetting = false
     
     @Published var currentPage = 0
     @Published var searchText: String = ""

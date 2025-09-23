@@ -209,7 +209,7 @@ struct LaunchpadView: View {
                     Spacer()
                     
                     Button {
-                        appStore.isSetting = true
+                        AppDelegate.shared?.showSettingsAction()
                     } label: {
                         Image(systemName: "ellipsis.circle")
                             .font(.title2)
@@ -1835,4 +1835,3 @@ struct LaunchpadBackgroundView: View {
         }
     }
 }
-

@@ -32,7 +32,8 @@ struct SettingsView: View {
         } message: {
             Text("This will completely reset the layout: remove all folders, clear saved order, and rescan all applications. All customizations will be lost.")
         }
-        .frame(minWidth: 700, minHeight: 500) // Set minimum size
+        // Slightly reduced minimums; content still fits without scrollbars
+        .frame(minWidth: 640, minHeight: 480)
     }
 }
 
