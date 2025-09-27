@@ -115,7 +115,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // Only hide if not showing settings or dialogs and window is visible
         guard let window = window, window.isVisible else { return }
         guard !appStore.isSetting && !isShowingAboutDialog else { return }
-        guard appStore.openFolder == nil && !appStore.isFolderNameEditing else { return }
         
         // Check if we're losing focus to another app (not just switching within our app)
         if NSApp.isActive == false {
@@ -353,6 +352,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     
     func hideWindow() {
         window?.orderOut(nil)
+        // Close settings window controller when main window is hidden
+        settingsWindowController?.window?.orderOut(nil)
+        settingsWindowController = nil  // Completely destroy the controller
         appStore.isSetting = false
         appStore.currentPage = 0
         appStore.searchText = ""
