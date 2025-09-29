@@ -432,6 +432,10 @@ final class AppStore: ObservableObject {
         
         hasPerformedInitialScan = false
         scanApplicationsWithOrderPreservation()
+        
+        // Restart auto-rescan to ensure ongoing monitoring works properly
+        stopAutoRescan()
+        startAutoRescan()
     }
     
     // MARK: - Enhanced Application Discovery
@@ -440,26 +444,7 @@ final class AppStore: ObservableObject {
     private func discoverApplicationsUsingLaunchServices() -> [AppInfo] {
         var applications: [AppInfo] = []
         
-        // Use NSWorkspace to get all applications from LaunchServices database
-        let workspace = NSWorkspace.shared
-        
-        // Get all application URLs from the system
-        // This uses the private Launch Services database that Spotlight and Launchpad use
-        let allApplications = workspace.runningApplications
-        for app in allApplications {
-            if let bundleURL = app.bundleURL,
-               bundleURL.pathExtension == "app",
-               FileManager.default.fileExists(atPath: bundleURL.path),
-               isValidApp(at: bundleURL) && 
-               shouldShowInLaunchpad(at: bundleURL) {
-                let resolved = bundleURL.resolvingSymlinksInPath()
-                if !applications.contains(where: { $0.url.path == resolved.path }) {
-                    applications.append(appInfo(from: resolved))
-                }
-            }
-        }
-        
-        // Alternative method: use mdfind (Spotlight) to find all .app bundles
+        // Use the mdfind (Spotlight) approach which is the most reliable for finding all installed apps
         // This mimics what Launchpad actually does internally
         let spotlightApps = findApplicationsUsingSpotlight()
         for app in spotlightApps {
@@ -2442,6 +2427,10 @@ final class AppStore: ObservableObject {
         // Force interface refresh
         triggerFolderUpdate()
         triggerGridRefresh()
+        
+        // Restart auto-rescan to ensure ongoing monitoring works properly
+        stopAutoRescan()
+        startAutoRescan()
     }
     
     /// Clear cache
