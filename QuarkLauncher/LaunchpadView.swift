@@ -773,7 +773,13 @@ extension LaunchpadView {
         if !isSearchFieldFocused && !isFolderOpen {
             // Ignore command/option/control shortcuts
             let mods = event.modifierFlags.intersection([.command, .control, .option])
-            if mods.isEmpty, let chars = event.charactersIgnoringModifiers, isPrintable(chars) {
+            // Check if this is a navigation key (arrow keys, page navigation, etc.) and skip type-to-search
+            // Navigation keys: arrow keys (123,124,125,126), tab (48), return (36), space (49), escape (53)
+            // Also check if it's a custom navigation key for page switching
+            let isNavigationKey = [123, 124, 125, 126, 48, 36, 49, 53].contains(event.keyCode) || 
+                                event.keyCode == appStore.previousPageKey || 
+                                event.keyCode == appStore.nextPageKey
+            if mods.isEmpty, let chars = event.charactersIgnoringModifiers, isPrintable(chars), !isNavigationKey {
                 // Begin a search session: focus the field and seed with typed characters
                 isSearchFieldFocused = true
                 if !chars.isEmpty {
