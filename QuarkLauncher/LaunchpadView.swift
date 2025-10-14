@@ -146,26 +146,38 @@ struct LaunchpadView: View {
                         .frame(height: actualTopPadding)
                 }
                 HStack(spacing: 8) {
-                    TextField("Search", text: $appStore.searchText, prompt: Text("Search").foregroundColor(.secondary))
-                    .disabled(isFolderOpen)
-                    .onChange(of: appStore.searchText) {
-                        guard !isFolderOpen else { return }
-                        appStore.currentPage = 0
-                        selectedIndex = filteredItems.isEmpty ? nil : 0
-                        isKeyboardNavigationActive = false
-                        clampSelection()
-                        let maxPageIndex = max(pages.count - 1, 0)
-                        if appStore.currentPage > maxPageIndex {
-                            appStore.currentPage = maxPageIndex
-                        }
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(.secondary)
+                            .padding(.leading, 8)
+                        TextField("Search", text: $appStore.searchText, prompt: Text("Search"))
+                            .disabled(isFolderOpen)
+                            .onChange(of: appStore.searchText) {
+                                guard !isFolderOpen else { return }
+                                appStore.currentPage = 0
+                                selectedIndex = filteredItems.isEmpty ? nil : 0
+                                isKeyboardNavigationActive = false
+                                clampSelection()
+                                let maxPageIndex = max(pages.count - 1, 0)
+                                if appStore.currentPage > maxPageIndex {
+                                    appStore.currentPage = maxPageIndex
+                                }
+                            }
+                            .focused($isSearchFieldFocused)
+                            .font(.body)
+                            .textFieldStyle(.plain)
+                            .padding(.vertical, 6)
+                            .padding(.trailing, 8)
                     }
-                    .focused($isSearchFieldFocused)
-                    .font(.title2)
-                    .textFieldStyle(.roundedBorder)
                     .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.primary.opacity(0.05))
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color(NSColor.controlBackgroundColor))
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color(NSColor.separatorColor), lineWidth: 0.5)
+                        }
                     )
+                    .cornerRadius(6)
                     Spacer()
                         .contentShape(Rectangle())
                         .onTapGesture {
@@ -177,16 +189,21 @@ struct LaunchpadView: View {
                     Button {
                         AppDelegate.shared?.showSettingsAction()
                     } label: {
-                        Image(systemName: "ellipsis.circle")
-                            .font(.title2)
-                            .foregroundStyle(.secondary)
+                        Image(systemName: "gearshape")
+                            .font(.body)
+                            .foregroundColor(.primary)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.borderless)
+                    .frame(width: 32, height: 32)
                     .background(
-                        Circle()
-                            .fill(Color.primary.opacity(0.05))
-                            .frame(width: 32, height: 32)
+                        ZStack {
+                            Circle()
+                                .fill(Color(NSColor.controlBackgroundColor))
+                            Circle()
+                                .stroke(Color(NSColor.separatorColor), lineWidth: 0.5)
+                        }
                     )
+                    .cornerRadius(6)
                 }
                 .padding(.top)
                 .padding(.horizontal)
@@ -328,7 +345,7 @@ struct LaunchpadView: View {
                                 .fill(appStore.currentPage == index ? Color.primary : Color.primary.opacity(0.3))
                                 .frame(width: 6, height: 6)
                                 .scaleEffect(appStore.currentPage == index ? 1.2 : 1.0)
-                                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: appStore.currentPage)
+                                .animation(LNAnimations.springFast, value: appStore.currentPage)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
                                     // Defocus search when interacting with page dots
@@ -1811,45 +1828,21 @@ struct LaunchpadBackgroundView: View {
         ZStack {
             // Base background - adapts to system appearance
             if isFullscreen {
-                // Fullscreen mode: Launchpad-style background with subtle texture
-                ZStack {
-                    // Main background color
-                    (colorScheme == .dark ? 
-                     Color(NSColor.controlBackgroundColor).opacity(0.95) : 
-                     Color(NSColor.controlBackgroundColor))
-                        .ignoresSafeArea()
-                    
-                    // Subtle noise texture overlay for authenticity
-                    Rectangle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.primary.opacity(0.02),
-                                    Color.clear,
-                                    Color.primary.opacity(0.01)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .ignoresSafeArea()
-                        .blendMode(colorScheme == .dark ? .multiply : .overlay)
-                }
+                // Fullscreen mode: Native macOS background
+                Color(NSColor.windowBackgroundColor)
+                    .ignoresSafeArea()
             } else {
-                // Window mode: translucent background with system material, matching original style
-                VisualEffectView(material: .fullScreenUI, blendingMode: .behindWindow)
-                    .clipShape(RoundedRectangle(cornerRadius: 30))
+                // Window mode: Native macOS background with subtle styling
+                Color(NSColor.controlBackgroundColor)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 30)
-                            .strokeBorder(
-                                Color.primary.opacity(colorScheme == .dark ? 0.08 : 0.15), 
-                                lineWidth: 0.5
-                            )
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color(NSColor.separatorColor), lineWidth: 0.5)
                     )
                     .shadow(
-                        color: .black.opacity(colorScheme == .dark ? 0.7 : 0.25),
-                        radius: 25,
-                        y: 15
+                        color: .black.opacity(colorScheme == .dark ? 0.2 : 0.1),
+                        radius: 8,
+                        y: 4
                     )
             }
         }

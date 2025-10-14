@@ -126,12 +126,12 @@ struct FolderView: View {
             VStack(spacing: 8) {
                 if isEditingName {
                     TextField("Folder Name", text: $folderName)
-                        .textFieldStyle(.plain)
+                        .textFieldStyle(.roundedBorder)
                         .multilineTextAlignment(.center)
-                        .font(.title)
+                        .font(.headline)
                         .foregroundColor(.primary)
                         .focused($isTextFieldFocused)
-                        .padding()
+                        .padding(8)
                         .onSubmit {
                             finishEditing()
                         }
@@ -149,9 +149,9 @@ struct FolderView: View {
                         )
                 } else {
                     Text(folder.name)
-                        .font(.title)
+                        .font(.headline)
                         .foregroundColor(.primary)
-                        .padding()
+                        .padding(8)
                         .contentShape(Rectangle()) // Ensure entire area is clickable
                         .onTapGesture(count: 2) {
                             startEditing()
@@ -594,20 +594,17 @@ struct FolderBackgroundView: View {
     
     var body: some View {
         ZStack {
-            // Background with original Launchpad folder styling
-            VisualEffectView(material: .menu, blendingMode: .behindWindow)
-                .clipShape(RoundedRectangle(cornerRadius: 30))
+            // Native macOS background styling
+            Color(NSColor.controlBackgroundColor)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 30)
-                        .strokeBorder(
-                            Color.primary.opacity(colorScheme == .dark ? 0.12 : 0.20), 
-                            lineWidth: 0.5
-                        )
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color(NSColor.separatorColor), lineWidth: 0.5)
                 )
                 .shadow(
-                    color: .black.opacity(colorScheme == .dark ? 0.8 : 0.3),
-                    radius: 20,
-                    y: 12
+                    color: .black.opacity(colorScheme == .dark ? 0.3 : 0.15),
+                    radius: 10,
+                    y: 5
                 )
         }
     }

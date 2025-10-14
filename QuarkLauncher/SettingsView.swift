@@ -55,10 +55,16 @@ struct SettingsCard<Content: View>: View {
             
             content
         }
-        .padding()
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.controlBackgroundColor).opacity(0.3))
-        .cornerRadius(12)
+        .background(
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(NSColor.controlBackgroundColor))
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color(NSColor.separatorColor), lineWidth: 0.5)
+            }
+        )
     }
 }
 

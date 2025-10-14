@@ -215,6 +215,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window?.contentMinSize = minimumContentSize
         window?.minSize = window?.frameRect(forContentRect: NSRect(origin: .zero, size: minimumContentSize)).size ?? minimumContentSize
         
+        // Set native macOS window appearance
+        window?.appearance = NSApp.effectiveAppearance
+        window?.titleVisibility = .hidden
+        window?.titlebarAppearsTransparent = true
+        window?.isMovableByWindowBackground = true
+        
         // Ensure the window can always become key and main
         window?.canHide = false
         window?.hidesOnDeactivate = false
@@ -421,7 +427,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func applyCornerRadius() {
         guard let contentView = window?.contentView else { return }
         contentView.wantsLayer = true
-        contentView.layer?.cornerRadius = appStore.isFullscreenMode ? 0 : 30
+        contentView.layer?.cornerRadius = appStore.isFullscreenMode ? 0 : 12
         contentView.layer?.masksToBounds = true
     }
     

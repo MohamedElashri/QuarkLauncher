@@ -51,17 +51,17 @@ struct LaunchpadItemButton: View {
                     }()
                     
                     if isFolderIcon {
-                        RoundedRectangle(cornerRadius: iconSize * 0.2)
+                        RoundedRectangle(cornerRadius: 8)
                             .foregroundStyle(Color.clear)
                             .frame(width: iconSize * 0.8, height: iconSize * 0.8)
                             .background(
-                                VisualEffectView(material: .selection, blendingMode: .withinWindow)
-                                    .clipShape(RoundedRectangle(cornerRadius: iconSize * 0.2))
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color(NSColor.controlBackgroundColor))
+                                    .shadow(color: .black.opacity(0.15), radius: 3, x: 0, y: 1)
                             )
-                            .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
                             .overlay(
-                                RoundedRectangle(cornerRadius: iconSize * 0.2)
-                                    .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color(NSColor.separatorColor), lineWidth: 0.5)
                             )
                     }
                     
@@ -72,7 +72,7 @@ struct LaunchpadItemButton: View {
                         .frame(width: iconSize, height: iconSize)
                         .id(item.id + "_" + forceRefreshTrigger.uuidString) // Use combined ID to force refresh, ensuring folder icons update correctly
                 }
-                .scaleEffect(isSelected ? 1.2 : effectiveScale)
+                .scaleEffect(isSelected ? 1.05 : effectiveScale)
                 .animation(LNAnimations.springFast, value: isHovered || isSelected)
 
                 Text(item.name)
