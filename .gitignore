@@ -1,3 +1,17 @@
 /.DS_Store
-build
+# Build artifacts
+build/
+DerivedData/
+*.app
+*.ipa
+*.dmg
+*.xcarchive
+
+# Xcode
+*.xcodeproj/project.xcworkspace/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/xcshareddata/xcschemes/*.xcscheme
+*.xcodeproj/project.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+
+# Visual Studio Code
 .vscode
